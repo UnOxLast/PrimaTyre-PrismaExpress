@@ -6,7 +6,8 @@
     "caching": "ts-node ./src/caching.ts",
     "migrate": "prisma migrate dev --name lazy",
     "devIndex": "tsx index.ts",
-    "devStart": "nodemon src/index.ts"
+    "dev": "nodemon src/index.ts",
+    "start": "nodemon src/index.ts"
   },
   "dependencies": {
     "@prisma/client": "6.7.0",
