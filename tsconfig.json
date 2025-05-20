@@ -1,0 +1,42 @@
+{
+  "compilerOptions": {
+    "target": "es2017",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "outDir": "dist",
+    "baseUrl": "src",
+    "lib": [
+      "es2017",
+      "esnext.asynciterable"
+    ],
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "sourceMap": true,
+    "resolveJsonModule": true
+  },
+  "include": [
+    "src/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}
+// {
+//   "compilerOptions": {
+//     "sourceMap": true,
+//     "outDir": "dist",
+//     "strict": true,
+//     "lib": [
+//       "esnext"
+//     ],
+//     "esModuleInterop": true,
+//     "moduleResolution": "node",
+//   },
+//   "include": [
+//     "src/**/*.ts"
+//   ],
+//   "exclude": [
+//     "node_modules"
+//   ]
+// }

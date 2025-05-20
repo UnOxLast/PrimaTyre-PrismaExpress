@@ -1,0 +1,139 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model ApiKey {
+  id        Int      @id @default(autoincrement())
+  key       String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model User {
+  id       Int      @id @default(autoincrement())
+  name     String   @unique
+  password String
+  roleId   Int
+  role     RoleUser @relation(fields: [roleId], references: [id])
+}
+
+model RoleUser {
+  id    Int    @id @default(autoincrement())
+  name  String @unique
+  users User[]
+}
+
+model Activity {
+  id Int @id @default(autoincrement())
+
+  // SEMUA
+  tyreId         Int
+  tyre           Tyre          @relation(fields: [tyreId], references: [id], onDelete: Cascade)
+  hmAtActivity   Float
+  activityType   ActivityType? @relation(fields: [activityTypeId], references: [id])
+  activityTypeId Int?
+  manpower       String?
+
+  // REMOVE only
+  tread1SaatRemove Float?
+  tread2SaatRemove Float?
+  dateTimeRemove   DateTime?
+  removePurposeId  Int?
+  removePurpose    RemovePurpose? @relation(fields: [removePurposeId], references: [id])
+  removeReasonId   String?        @db.VarChar(10)
+  removeReason     RemoveReason?  @relation(fields: [removeReasonId], references: [id])
+
+  // INSTALL only
+  unitId           Int?
+  unit             Unit?         @relation(fields: [unitId], references: [id])
+  positionTyre     Int?
+  tread1SaatPasang Float?
+  tread2SaatPasang Float?
+  dateTimeInstall  DateTime?
+  airConditionId   Int?
+  airCondition     AirCondition? @relation(fields: [airConditionId], references: [id])
+  airPressure      Int?
+}
+
+model Unit {
+  id        Int     @id @default(autoincrement())
+  nomorUnit String  @unique
+  hmUnit    Int
+  siteId    Int
+  location  String?
+
+  site       Site       @relation(fields: [siteId], references: [id])
+  tyre       Tyre[]
+  activities Activity[]
+}
+
+model Site {
+  id   Int    @id @default(autoincrement())
+  name String @unique
+
+  units Unit[]
+}
+
+model Tyre {
+  id           Int     @id @default(autoincrement())
+  serialNumber String  @unique
+  merk         String?
+  tread1       Float?
+  tread2       Float?
+  isInstalled  Boolean @default(false)
+
+  tyreSize   TyreSize @relation(fields: [tyreSizeId], references: [id])
+  tyreSizeId Int
+
+  activities Activity[]
+
+  //Jika Terinstall direlasikan ke unit
+  positionTyre    Int?
+  installedUnit   Unit? @relation(fields: [installedUnitId], references: [id])
+  installedUnitId Int?
+
+  //Jika Tidak Terinstall direlasikan ke activitypurpose
+  removedPurpose   RemovePurpose? @relation(fields: [removedPurposeId], references: [id])
+  removedPurposeId Int?
+
+  @@unique([installedUnitId, positionTyre], name: "uniqueTyrePosition")
+}
+
+model TyreSize {
+  id    Int    @id @default(autoincrement())
+  size  String @unique
+  tyres Tyre[]
+}
+
+model ActivityType {
+  id   Int    @id @default(autoincrement())
+  name String @unique
+
+  activities Activity[]
+}
+
+model RemovePurpose {
+  id   Int    @id @default(autoincrement())
+  name String @unique
+
+  activities Activity[]
+  tyre       Tyre[]
+}
+
+model RemoveReason {
+  id          String @id @db.VarChar(10) // Contoh: "A", "B1", dst
+  description String
+
+  activities Activity[]
+}
+
+model AirCondition {
+  id         Int        @id @default(autoincrement())
+  name       String     @unique
+  activities Activity[]
+}
