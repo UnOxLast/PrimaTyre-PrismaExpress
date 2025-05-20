@@ -7,6 +7,7 @@ import dropdownRouter from './routes/dropdown.router';
 import { apiKeyDbAuth } from "./middlewares/apikey.middleware"; // disarankan pindahkan ke folder `middlewares`
 
 const app = express();
+const PORT = process.env.PORT || 3000;
 
 app.use((req, res, next) => {
     res.header("Access-Control-Allow-Origin", "*");
@@ -20,12 +21,12 @@ app.use((req, res, next) => {
     next();
 });
 
-// const apiKeyMiddleware = (req: Request, res: Response, next: NextFunction) => {
-//     if (req.path === "/ping") return next();
-//     return apiKeyDbAuth(req, res, next);
-// };
+const apiKeyMiddleware = (req: Request, res: Response, next: NextFunction) => {
+    if (req.path === "/ping") return next();
+    return apiKeyDbAuth(req, res, next);
+};
 
-// app.use(apiKeyMiddleware);
+app.use(apiKeyMiddleware);
 app.use(express.json());
 
 app.use('/tyre', tyreRouter);
@@ -38,6 +39,6 @@ app.get('/ping', (req, res) => {
     res.status(200).json({ message: 'pong' });
 });
 
-app.listen(8080, '0.0.0.0', () => {
+app.listen(Number(PORT), '0.0.0.0', () => {
     console.log('Server running on http://0.0.0.0:3000');
 });
