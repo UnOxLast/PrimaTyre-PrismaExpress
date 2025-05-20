@@ -23,6 +23,17 @@
     "tsx": "^4.19.4",
     "typescript": "^5.8.2"
   },
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "CommonJS",
+    "outDir": "dist",
+    "rootDir": "src",
+    "strict": true,
+    "esModuleInterop": true
+  },
+  "include": [
+    "src"
+  ],
   "version": "1.0.0",
   "description": "This Project is PrimaTyre from Prima Jaya Persada",
   "main": "src/index.js",
