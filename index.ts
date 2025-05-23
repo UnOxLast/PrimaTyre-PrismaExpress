@@ -5,13 +5,6 @@ const prisma = new PrismaClient().$extends(withAccelerate())
 
 async function main() {
 
-
-  await prisma.apiKey.create({
-    data: {
-      key: "halodek"
-    },
-  });
-
   // const unit = await prisma.unit.findUnique({
   //   where: { nomor_unit: 'PJ-SN 004' },
   // })

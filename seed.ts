@@ -4,74 +4,96 @@ import { withAccelerate } from '@prisma/extension-accelerate'
 const prisma = new PrismaClient().$extends(withAccelerate())
 
 async function main() {
+    // ApiKey (anggap key unik)
+    await prisma.apiKey.upsert({
+        where: { key: "halodek" },
+        update: {},
+        create: { key: "halodek" },
+    })
 
     // RoleUser
-    await prisma.roleUser.createMany({
-        data: [
-            { name: 'admin' },
-            { name: 'worker' },
-            { name: 'reviewer' }
-        ],
-        skipDuplicates: true,
-    })
-
-    // Activity Types
-    await prisma.activityType.createMany({
-        data: [
-            { name: 'INSTALL' },
-            { name: 'REMOVE' },
-        ],
-        skipDuplicates: true,
-    })
+    const roles = ['admin', 'TCM', 'TIS', 'inspector']
+    for (const name of roles) {
+        await prisma.roleUser.upsert({
+            where: { name },
+            update: {},
+            create: { name },
+        })
+    }
 
     // Site
-    await prisma.site.createMany({
-        data: [
-            { name: 'TCM' },
-            { name: 'TIS' }
-        ],
-        skipDuplicates: true
-    })
+    const sites = ['TCM', 'TIS']
+    for (const name of sites) {
+        await prisma.site.upsert({
+            where: { name },
+            update: {},
+            create: { name },
+        })
+    }
 
-    // Purpose
-    await prisma.removePurpose.createMany({
-        data: [
-            { name: 'SPARE' },
-            { name: 'SCRAP' },
-            { name: 'REPAIR' },
-            { name: 'RETREAD' },
-            { name: 'WARRANTY' },
-        ],
-        skipDuplicates: true,
-    })
+    // Purpose (removePurpose)
+    const purposes = ['SPARE', 'SCRAP', 'REPAIR', 'RETREAD', 'WARRANTY']
+    for (const name of purposes) {
+        await prisma.removePurpose.upsert({
+            where: { name },
+            update: {},
+            create: { name },
+        })
+    }
 
-    // Air Condition
-    await prisma.airCondition.createMany({
-        data: [
-            { name: 'HOT' },
-            { name: 'COLD' },
-        ],
-        skipDuplicates: true,
-    })
+    // AirCondition
+    const airConditions = ['HOT', 'COLD']
+    for (const name of airConditions) {
+        await prisma.airCondition.upsert({
+            where: { name },
+            update: {},
+            create: { name },
+        })
+    }
+
+    // TyreSize
+    const tyreSizes = [
+        '27.00R49',
+        '24.00R35',
+        '16.00R25',
+        '14.00R24',
+        '12.00R24',
+        '12.00R20',
+        '11.00R20',
+        '23.5R25',
+        '20.5R25',
+    ]
+    for (const size of tyreSizes) {
+        await prisma.tyreSize.upsert({
+            where: { size },
+            update: {},
+            create: { size },
+        })
+    }
+
+    const merkNames = [
+        'BRIDGESTONE',
+        'MAXAM',
+        'AEOLUS',
+        'TUTRIC',
+        'UNINEST',
+        'ADVANCE',
+        'MICHELLIN',
+        'GALAXY',
+        'TECHKING',
+    ]
+
+    for (const name of merkNames) {
+        await prisma.merk.upsert({
+            where: { name },
+            update: {},
+            create: { name },
+        })
+    }
 
 
-    //sizeTyre
-    await prisma.tyreSize.createMany({
-        data: [
-            { size: '27.00R49' },
-            { size: '24.00R35' },
-            { size: '16.00R25' },
-            { size: '14.00R24' },
-            { size: '12.00R24' },
-            { size: '12.00R20' },
-            { size: '11.00R20' },
-            { size: '23.5R25' },
-            { size: '20.5R25' },
-        ],
-        skipDuplicates: true,
-    })
 
-    //removeReason
+    // RemoveReason (id unik)
     const reasons = [
         { id: 'A', description: 'SMOOTH' },
         { id: 'B1', description: 'STONE DRILLING' },
@@ -142,65 +164,72 @@ async function main() {
         { id: 'Y', description: 'TREAD HEAT SEPARATION' },
         { id: 'Z', description: 'MECHANICAL MAINTENACE' },
     ]
-    await prisma.removeReason.createMany({
-        data: reasons,
-        skipDuplicates: true,
-    })
 
-    //user
-    await prisma.user.createMany({
-        data: [
-            {
-                name: 'adminpertama',
-                password: 'proteksi',
-                roleId: 1, // Pastikan roleId 1 = Admin
-            },
-            {
-                name: 'workerpertama',
-                password: 'pekerja',
-                roleId: 2, // Misalnya roleId 2 = Worker
-            },
-            {
-                name: 'reviewerpertama',
-                password: 'pemantau',
-                roleId: 3, // Misalnya roleId 3 = Reviewer
-            }
-        ],
-        skipDuplicates: true, // Supaya tidak error kalau sudah ada
-    })
+    for (const reason of reasons) {
+        await prisma.removeReason.upsert({
+            where: { id: reason.id },
+            update: { description: reason.description },
+            create: reason,
+        })
+    }
 
-    //unit
-    await prisma.unit.createMany({
-        data: [
-            {
-                nomorUnit: "PJ-SN 004",
-                hmUnit: 6677,
-                siteId: 1,
-                location: "BLOK 12"
+    // User
+    const users = [
+        { name: 'administrator', password: 'admin', roleId: 1 },
+        { name: 'admintcm', password: 'tcm', roleId: 2 },
+        { name: 'admintis', password: 'tis', roleId: 3 },
+    ]
+
+    for (const user of users) {
+        await prisma.user.upsert({
+            where: { name: user.name },
+            update: {
+                password: user.password,
+                roleId: user.roleId,
             },
-            {
-                nomorUnit: "PJ-SN 007",
-                hmUnit: 5473,
-                siteId: 1,
-                location: "BLOK 12"
-            },
-            {
-                nomorUnit: "PJ-DT 109",
-                hmUnit: 3990,
-                siteId: 1,
-            },
-        ],
-        skipDuplicates: true
-    })
+            create: user,
+        })
+    }
+
+    // Jika ingin insert unit, pakai upsert juga atau createMany (tanpa skipDuplicates)
+    // Contoh upsert unit (commented)
+    /*
+    const units = [
+      {
+        nomorUnit: "PJ-SN 004",
+        hmUnit: 6677,
+        siteId: 1,
+        location: "BLOK 12"
+      },
+      {
+        nomorUnit: "PJ-SN 007",
+        hmUnit: 5473,
+        siteId: 1,
+        location: "BLOK 10"
+      }
+    ]
+  
+    for (const unit of units) {
+      await prisma.unit.upsert({
+        where: { nomorUnit: unit.nomorUnit },
+        update: {
+          hmUnit: unit.hmUnit,
+          siteId: unit.siteId,
+          location: unit.location
+        },
+        create: unit,
+      })
+    }
+    */
 }
 
 main()
-    .then(async () => {
-        await prisma.$disconnect()
+    .then(() => {
+        console.log('Seeding selesai')
+        return prisma.$disconnect()
     })
     .catch(async (e) => {
-        console.error(e)
+        console.error('Error seeding:', e)
         await prisma.$disconnect()
         process.exit(1)
     })
-

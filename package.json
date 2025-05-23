@@ -5,7 +5,9 @@
     "queries": "ts-node ./src/queries.ts",
     "caching": "ts-node ./src/caching.ts",
     "migrate": "prisma migrate dev --name lazy",
+    "push": "prisma db push",
     "devIndex": "tsx index.ts",
+    "devSeed": "tsx seed.ts",
     "dev": "nodemon src/index.ts",
     "start": "ts-node src/index.ts"
   },
