@@ -10,7 +10,6 @@ const prismaClient = new PrismaClient();
 export const getAllActivityTyre = async (req: Request, res: Response) => {
     try {
         const activities = await activityClient.findMany({
-<<<<<<< HEAD
             include: {
                 inspections: {
                     include: {
@@ -18,18 +17,10 @@ export const getAllActivityTyre = async (req: Request, res: Response) => {
                     }
                 }
             },
-=======
->>>>>>> 6e1ad0512ef4888c5cb0209383ff2c01da294f2a
             orderBy: {
                 dateTimeWork: 'asc',
             },
         });
-<<<<<<< HEAD
-=======
-
-
-
->>>>>>> 6e1ad0512ef4888c5cb0209383ff2c01da294f2a
         res.status(200).json({ data: activities });
     } catch (error) {
         console.error(error);
@@ -82,7 +73,6 @@ export const getActivityByTyreId = async (req: Request, res: Response) => {
                 removedTyre: true,
                 unit: true,
                 removePurpose: true,
-<<<<<<< HEAD
                 airCondition: true,
                 inspections: {
                     include: {
@@ -94,9 +84,6 @@ export const getActivityByTyreId = async (req: Request, res: Response) => {
                         }
                     }
                 }
-=======
-                airCondition: true
->>>>>>> 6e1ad0512ef4888c5cb0209383ff2c01da294f2a
             }
         });
 
@@ -112,12 +99,6 @@ export const getActivityByTyreId = async (req: Request, res: Response) => {
     }
 };
 
-<<<<<<< HEAD
-=======
-
-
-
->>>>>>> 6e1ad0512ef4888c5cb0209383ff2c01da294f2a
 //activityTyre
 export const createActivityTyre = async (req: Request, res: Response) => {
     try {
@@ -303,7 +284,6 @@ export const createActivityTyre = async (req: Request, res: Response) => {
                     orderBy: { dateTimeWork: 'asc' }
                 });
 
-<<<<<<< HEAD
                 // Ambil nilai oHM dan oKM dari StockTyre
                 const tyreWithStock = await tx.tyre.findUnique({
                     where: { id: removedTyreId },
@@ -319,10 +299,6 @@ export const createActivityTyre = async (req: Request, res: Response) => {
 
                 let totalHM = tyreWithStock?.stockTyre?.oHM || 0;
                 let totalKM = tyreWithStock?.stockTyre?.oKM || 0;
-=======
-                let totalHM = 0;
-                let totalKM = 0;
->>>>>>> 6e1ad0512ef4888c5cb0209383ff2c01da294f2a
 
                 const len = Math.min(allInstalled.length, allRemoved.length);
                 for (let i = 0; i < len; i++) {
@@ -415,159 +391,6 @@ export const createActivityTyre = async (req: Request, res: Response) => {
         res.status(500).json({ error: "Internal server error", message: error.message });
     }
 };
-<<<<<<< HEAD
-=======
-
-
-
-
-
-
-// //getActivityByTyreId
-// export const getActivityByTyreId = async (req: Request, res: Response) => {
-//     const tyreId = Number(req.params.id);
-//     try {
-//         const activities = await activityClient.findMany({
-//             where: {
-//                 tyreId: tyreId,
-//             },
-//             include: {
-//                 tyre: true,
-//                 unit: true,
-//                 activityType: true,
-//                 removePurpose: true,
-//                 // RemoveReason: true,
-//                 airCondition: true,
-//             },
-//             orderBy: {
-//                 id: 'desc',
-//             },
-//         });
-
-//         if (!activities || activities.length === 0) {
-//             res.status(404).json({ message: 'No activity found for this tyreId' });
-//         } else {
-//             res.status(200).json({ data: activities });
-//         }
-
-//     } catch (error) {
-//         console.error(error);
-//         res.status(500).json({ message: 'Failed to fetch activities by tyreId' });
-//     }
-// };
-
-// //createActivity
-// export const createActivity = async (req: Request, res: Response) => {
-//     try {
-//         const {
-//             tyreId,
-//             unitId,
-//             activityTypeId,
-//             removePurposeId,
-//             removeReasonId,
-//             airConditionId,
-//             positionTyre,
-//             manpower,
-//             dateTimeRemove,
-//             dateTimeInstall,
-//             hmAtActivity,
-//             tread1SaatRemove,
-//             tread2SaatRemove,
-//             removeReason,
-//             tread1SaatPasang,
-//             tread2SaatPasang,
-//         } = req.body;
-
-//         const newActivity = await activityClient.create({
-//             data: {
-//                 tyreId,
-//                 unitId,
-//                 activityTypeId,
-//                 removePurposeId,
-//                 removeReasonId,
-//                 airConditionId,
-//                 positionTyre,
-//                 manpower,
-//                 dateTimeRemove: dateTimeRemove ? new Date(dateTimeRemove) : null,
-//                 dateTimeInstall: dateTimeInstall ? new Date(dateTimeInstall) : null,
-//                 hmAtActivity,
-//                 tread1SaatRemove,
-//                 tread2SaatRemove,
-//                 tread1SaatPasang,
-//                 tread2SaatPasang,
-//                 removeReason,
-//             },
-//         });
-
-//         res.status(201).json({ message: "Activity created successfully", data: newActivity });
-//     } catch (error) {
-//         console.error("Failed to create activity:", error);
-//         res.status(500).json({ message: "Internal server error" });
-//     }
-// };
-
-// //updateActivity
-// export const updateActivity = async (req: Request, res: Response) => {
-//     const activityId = Number(req.params.id);
-//     const {
-//         tyreId,
-//         unitId,
-//         activityTypeId,
-//         removePurposeId,
-//         removeReasonId,
-//         airConditionId,
-//         positionTyre,
-//         manpower,
-//         dateTimeRemove,
-//         dateTimeInstall,
-//         hmAtActivity,
-//         tread1SaatRemove,
-//         tread2SaatRemove,
-//         removeReason,
-//         tread1SaatPasang,
-//         tread2SaatPasang,
-//     } = req.body;
-
-//     try {
-//         const updatedActivity = await activityClient.update({
-//             where: { id: activityId },
-//             data: {
-//                 tyreId,
-//                 unitId,
-//                 activityTypeId,
-//                 removePurposeId,
-//                 removeReasonId,
-//                 airConditionId,
-//                 positionTyre,
-//                 manpower,
-//                 hmAtActivity,
-//                 tread1SaatRemove,
-//                 tread2SaatRemove,
-//                 removeReason,
-//                 dateTimeRemove,
-//                 tread1SaatPasang,
-//                 tread2SaatPasang,
-//                 dateTimeInstall,
-//             },
-//             include: {
-//                 tyre: true,
-//                 unit: true,
-//                 activityType: true,
-//                 removePurpose: true,
-//                 removeReason: true,
-//                 airCondition: true,
-//             },
-//         });
-
-//         res.status(200).json({ message: 'Activity updated successfully', data: updatedActivity });
-//     } catch (error) {
-//         console.error(error);
-//         res.status(500).json({ message: 'Failed to update activity' });
-//     }
-// };
-
-// //deleteActivity
->>>>>>> 6e1ad0512ef4888c5cb0209383ff2c01da294f2a
 
 
 

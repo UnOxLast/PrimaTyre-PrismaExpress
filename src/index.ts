@@ -6,10 +6,7 @@ import activityRouter from './routes/activity.router';
 import dropdownRouter from './routes/dropdown.router';
 import { apiKeyDbAuth } from "./middlewares/apikey.middleware"; // disarankan pindahkan ke folder `middlewares`
 import inspectionRouter from './routes/inspection.router';
-<<<<<<< HEAD
 import actionTyreRouter from './routes/actionTyre.router';
-=======
->>>>>>> 6e1ad0512ef4888c5cb0209383ff2c01da294f2a
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -39,10 +36,7 @@ app.use('/unit', unitRouter);
 app.use('/user', userRouter);
 app.use('/activity', activityRouter);
 app.use('/inspection', inspectionRouter)
-<<<<<<< HEAD
 app.use('/action', actionTyreRouter);
-=======
->>>>>>> 6e1ad0512ef4888c5cb0209383ff2c01da294f2a
 app.use('/dropdown', dropdownRouter);
 
 app.get('/ping', (req, res) => {
