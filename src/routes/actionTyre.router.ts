@@ -7,4 +7,4 @@ router.get("/", getAllActionTyre);
 router.put("/:id", updateActionTyre);
 
 
-export default router;
+export default module.exports = router;
