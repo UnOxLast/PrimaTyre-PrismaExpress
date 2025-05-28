@@ -7,7 +7,7 @@ const userClient = new PrismaClient().user;
 export const getAllUser = async (req: Request, res: Response) => {
     try {
         const users = await userClient.findMany({
-            include: { role: true },
+            include: { roleUser: true },
         });
         res.status(200).json({ data: users });
     } catch (error) {
@@ -22,7 +22,7 @@ export const getUserById = async (req: Request, res: Response) => {
         const UserId = Number(req.params.id);
         const user = await userClient.findFirst({
             where: { id: UserId },
-            include: { role: true },
+            include: { roleUser: true },
         });
         // if (!user) return res.status(404).json({ message: "User not found" });
         res.status(200).json({ data: user });
@@ -38,7 +38,7 @@ export const getUserByUsername = async (req: Request, res: Response) => {
         const username = req.params.id;
         const user = await userClient.findFirst({
             where: { name: username },
-            include: { role: true },
+            include: { roleUser: true },
         });
         // if (!user) return res.status(404).json({ message: "User not found" });
         res.status(200).json({ data: user });
@@ -54,7 +54,7 @@ export const createUser = async (req: Request, res: Response) => {
     try {
         const newUser = await userClient.create({
             data: { name, password, roleId },
-            include: { role: true },
+            include: { roleUser: true },
         });
         res.status(201).json({ message: "User created", data: newUser });
     } catch (error) {
@@ -71,7 +71,7 @@ export const updateUser = async (req: Request, res: Response) => {
         const updatedUser = await userClient.update({
             where: { id: UserId },
             data: { name, password, roleId },
-            include: { role: true },
+            include: { roleUser: true },
         });
         res.status(200).json({ message: "User updated", data: updatedUser });
     } catch (error) {

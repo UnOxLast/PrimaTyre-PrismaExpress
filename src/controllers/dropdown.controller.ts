@@ -4,14 +4,15 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
 const tableMap: Record<string, any> = {
-    activityType: prisma.activityType,
     airCondition: prisma.airCondition,
     removePurpose: prisma.removePurpose,
     removeReason: prisma.removeReason,
     roleUser: prisma.roleUser,
     site: prisma.site,
     tyreSize: prisma.tyreSize,
-    unit: prisma.unit
+    merk: prisma.merk,
+    unit: prisma.unit,
+    tyre: prisma.tyre
 };
 
 // GET: Ambil semua dropdown sekaligus
@@ -19,19 +20,21 @@ export const getAllDropdown = async (req: Request, res: Response) => {
     try {
         const entries = await Promise.all(
             Object.entries(tableMap).map(async ([key, model]) => {
-                if (key === "unit") {
+                // const data = await model.findMany();
+                // return [key, data];
+                if (key === "tyre") {
                     const data = await model.findMany({
                         include: {
-                            site: true,
-                            tyre: {
-                                select: {
-                                    id: true,
-                                    serialNumber: true,
-                                    isInstalled: true,
-                                    positionTyre: true,
-                                    installedUnitId: true
-                                }
-                            }
+                            stockTyre: true,
+                            // tyre: {
+                            //     select: {
+                            //         id: true,
+                            //         serialNumber: true,
+                            //         isInstalled: true,
+                            //         positionTyre: true,
+                            //         installedUnitId: true
+                            //     }
+                            // }
                         }
                     });
                     return [key, data];
@@ -50,7 +53,6 @@ export const getAllDropdown = async (req: Request, res: Response) => {
     }
 };
 
-
 // POST: Tambah satu item ke dropdown tertentu
 export const createDropdownItem = async (req: Request, res: Response) => {
     const { type } = req.params;
@@ -60,6 +62,11 @@ export const createDropdownItem = async (req: Request, res: Response) => {
     if (!model) {
         res.status(400).json({ message: "Invalid dropdown type" });
         return
+    }
+
+    if (!data || Object.keys(data).length === 0) {
+        res.status(400).json({ message: "Request body is required" });
+        return;
     }
 
     try {

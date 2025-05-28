@@ -5,6 +5,8 @@ import userRouter from './routes/user.router';
 import activityRouter from './routes/activity.router';
 import dropdownRouter from './routes/dropdown.router';
 import { apiKeyDbAuth } from "./middlewares/apikey.middleware"; // disarankan pindahkan ke folder `middlewares`
+import inspectionRouter from './routes/inspection.router';
+import actionTyreRouter from './routes/actionTyre.router';
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -21,18 +23,20 @@ app.use((req, res, next) => {
     next();
 });
 
-const apiKeyMiddleware = (req: Request, res: Response, next: NextFunction) => {
-    if (req.path === "/ping") return next();
-    return apiKeyDbAuth(req, res, next);
-};
+// const apiKeyMiddleware = (req: Request, res: Response, next: NextFunction) => {
+//     if (req.path === "/ping") return next();
+//     return apiKeyDbAuth(req, res, next);
+// };
+// app.use(apiKeyMiddleware);
 
-app.use(apiKeyMiddleware);
 app.use(express.json());
 
 app.use('/tyre', tyreRouter);
 app.use('/unit', unitRouter);
 app.use('/user', userRouter);
 app.use('/activity', activityRouter);
+app.use('/inspection', inspectionRouter)
+app.use('/action', actionTyreRouter);
 app.use('/dropdown', dropdownRouter);
 
 app.get('/ping', (req, res) => {
