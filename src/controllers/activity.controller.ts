@@ -168,7 +168,6 @@ export const createActivityTyre = async (req: Request, res: Response) => {
 
             // Pilih posisi ban:
             const finalTyrePosition = positionFromUnit ?? tyrePosition ?? null;
-            console.log(positionFromUnit, finalTyrePosition)
 
             // Siapkan data untuk update unit
             const unitUpdateData: any = {};
@@ -348,7 +347,7 @@ export const createActivityTyre = async (req: Request, res: Response) => {
                 : installedTyreId
                     ? await tx.tyre.findUnique({ where: { id: installedTyreId } })
                     : null;
-            console.log(positionFromUnit, finalTyrePosition)
+
             if (tyreForInspection) {
                 await tx.inspectionTyre.create({
                     data: {

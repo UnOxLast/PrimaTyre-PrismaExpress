@@ -89,12 +89,10 @@ export const updateActionTyre = async (req: Request, res: Response) => {
                         where: { id: action.removePurposeId },
                     });
 
-                    const isScrapPurpose = purpose?.name.toLowerCase() === 'scrap';
-
                     tyreUpdateData = {
                         isReady: false,
-                        isScrap: isScrapPurpose,
-                        removedPurposeId: action.removePurposeId, // Tetap gunakan removePurposeId yang ada
+                        isScrap: true,
+                        removedPurposeId: purpose?.id, // Tetap gunakan removePurposeId yang ada jika bukan scrap
                     };
                 } else {
                     // Belum selesai → jangan ubah status scrap
@@ -132,7 +130,5 @@ export const updateActionTyre = async (req: Request, res: Response) => {
             console.error('Error updating ActionTyre:', error);
             res.status(500).json({ error: 'Internal Server Error', message: error?.message });
         }
-    } finally {
-        await prisma.$disconnect();
     }
 };

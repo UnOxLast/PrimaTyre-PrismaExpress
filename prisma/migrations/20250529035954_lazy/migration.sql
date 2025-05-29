@@ -53,13 +53,13 @@ CREATE TABLE [dbo].[InspectionTyre] (
     [unitId] INT,
     [isDone] BIT CONSTRAINT [InspectionTyre_isDone_df] DEFAULT 0,
     [actionTyreId] INT,
-    CONSTRAINT [InspectionTyre_pkey] PRIMARY KEY CLUSTERED ([id]),
-    CONSTRAINT [InspectionTyre_actionTyreId_key] UNIQUE NONCLUSTERED ([actionTyreId])
+    CONSTRAINT [InspectionTyre_pkey] PRIMARY KEY CLUSTERED ([id])
 );
 
 -- CreateTable
 CREATE TABLE [dbo].[ActionTyre] (
     [id] INT NOT NULL IDENTITY(1,1),
+    [tyreId] INT,
     [removePurposeId] INT,
     [isDone] BIT NOT NULL CONSTRAINT [ActionTyre_isDone_df] DEFAULT 0,
     [dateTimeIn] DATETIME2,
@@ -85,6 +85,9 @@ CREATE TABLE [dbo].[Tyre] (
     [updatedAt] DATETIME2 NOT NULL,
     [hmTyre] INT,
     [kmTyre] INT,
+    [isDeleted] BIT NOT NULL CONSTRAINT [Tyre_isDeleted_df] DEFAULT 0,
+    [deletedAt] DATETIME2,
+    [deletedBy] NVARCHAR(1000),
     CONSTRAINT [Tyre_pkey] PRIMARY KEY CLUSTERED ([id]),
     CONSTRAINT [Tyre_stockTyreId_key] UNIQUE NONCLUSTERED ([stockTyreId])
 );
@@ -237,6 +240,9 @@ ALTER TABLE [dbo].[InspectionTyre] ADD CONSTRAINT [InspectionTyre_actionTyreId_f
 
 -- AddForeignKey
 ALTER TABLE [dbo].[ActionTyre] ADD CONSTRAINT [ActionTyre_removePurposeId_fkey] FOREIGN KEY ([removePurposeId]) REFERENCES [dbo].[RemovePurpose]([id]) ON DELETE SET NULL ON UPDATE CASCADE;
+
+-- AddForeignKey
+ALTER TABLE [dbo].[ActionTyre] ADD CONSTRAINT [ActionTyre_tyreId_fkey] FOREIGN KEY ([tyreId]) REFERENCES [dbo].[Tyre]([id]) ON DELETE NO ACTION ON UPDATE NO ACTION;
 
 -- AddForeignKey
 ALTER TABLE [dbo].[Tyre] ADD CONSTRAINT [Tyre_installedUnitId_fkey] FOREIGN KEY ([installedUnitId]) REFERENCES [dbo].[Unit]([id]) ON DELETE NO ACTION ON UPDATE NO ACTION;

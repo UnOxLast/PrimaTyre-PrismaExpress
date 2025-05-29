@@ -14,19 +14,9 @@ const prismaClient = new PrismaClient();
 export const getAllTyre = async (req: Request, res: Response) => {
     try {
         const allTyresRaw = await tyreClient.findMany({
-            select: {
-                id: true,
-                positionTyre: true,
+            where: { isDeleted: false },
+            include: {
                 stockTyre: true,
-                hmTyre: true,
-                kmTyre: true,
-                isInstalled: true,
-                isReady: true,
-                isScrap: true,
-                tread1: true,
-                tread2: true,
-                installedUnit: true,
-                removedPurpose: true,
             },
         });
         res.status(200).json({ data: allTyresRaw });
@@ -42,6 +32,7 @@ export const getAllTyre = async (req: Request, res: Response) => {
 export const getAllStockTyre = async (req: Request, res: Response) => {
     try {
         const allStockTyre = await stockTyreClient.findMany({
+            where: { tyre: { isDeleted: false } },
             select: {
                 id: true,
                 serialNumber: true,
@@ -74,7 +65,7 @@ export const getStockTyreById = async (req: Request, res: Response) => {
         }
 
         const stockTyre = await stockTyreClient.findUnique({
-            where: { id },
+            where: { id, tyre: { isDeleted: false } },
             include: {
                 merk: true,
                 tyreSize: true,
@@ -299,19 +290,36 @@ export const updateStockTyre = async (req: Request, res: Response) => {
  * - Validasi ID.
  */
 export const deleteTyre = async (req: Request, res: Response) => {
-    const tyreId = Number(req.params.id);
-    if (isNaN(tyreId)) {
-        res.status(400).json({ error: "Invalid tyre ID" });
-        return;
-    }
     try {
-        await tyreClient.delete({
+        const tyreId = Number(req.params.id);
+        const deletedBy = req.body.deletedBy || 'system'; // Ganti sesuai autentikasi kamu
+
+        const existingTyre = await tyreClient.findUnique({
             where: { id: tyreId },
         });
 
-        res.status(200).json({ message: "Tyre deleted successfully" });
-    } catch (e) {
-        console.error(e);
-        res.status(500).json({ error: "Failed to delete tyre" });
+        if (!existingTyre) {
+            res.status(404).json({ error: 'Tyre not found' });
+            return
+        }
+
+        if (existingTyre.isDeleted) {
+            res.status(400).json({ error: 'Tyre already deleted' });
+            return
+        }
+
+        const result = await tyreClient.update({
+            where: { id: tyreId },
+            data: {
+                isDeleted: true,
+                deletedAt: new Date(),
+                deletedBy: deletedBy,
+            },
+        });
+
+        res.status(200).json({ message: 'Tyre soft-deleted successfully', result });
+    } catch (error: any) {
+        console.error('Soft delete failed:', error);
+        res.status(500).json({ error: 'Internal server error', message: error.message });
     }
 };

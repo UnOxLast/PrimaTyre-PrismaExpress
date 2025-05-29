@@ -51,18 +51,16 @@ export const updateInspectionTyre = async (req: Request, res: Response) => {
             });
 
             if (!inspection) {
-                res.status(404).json({ error: 'InspectionTyre not found' });
-                return;
+                throw res.status(404).json({ error: 'InspectionTyre not found' });
+
             }
 
             if (inspection.tyre.isScrap) {
-                res.status(403).json({ error: 'Tyre has been scrapped and cannot be modified' });
-                return;
+                throw res.status(403).json({ error: 'Tyre has been scrapped and cannot be modified' });
             }
 
             if (isReady === false && !removePurposeId) {
-                res.status(400).json({ error: 'removePurposeId is required when isReady is false' });
-                return;
+                throw res.status(400).json({ error: 'removePurposeId is required when isReady is false' });
             }
 
             const updatedInspection = await tx.inspectionTyre.update({
@@ -86,7 +84,7 @@ export const updateInspectionTyre = async (req: Request, res: Response) => {
                     }
                 });
             } else {
-                const purpose = await removedPurposeClient.findUnique({
+                const purpose = await tx.removePurpose.findUnique({
                     where: { id: removePurposeId }
                 });
 
@@ -107,7 +105,7 @@ export const updateInspectionTyre = async (req: Request, res: Response) => {
                 });
 
                 // Tambahkan ActionTyre jika belum pernah dibuat
-                const existingAction = await actionTyreClient.findFirst({
+                const existingAction = await tx.actionTyre.findFirst({
                     where: {
                         inspections: {
                             some: {
@@ -118,7 +116,7 @@ export const updateInspectionTyre = async (req: Request, res: Response) => {
                 });
 
                 if (!existingAction) {
-                    await actionTyreClient.create({
+                    await tx.actionTyre.create({
                         data: {
                             tyreId: inspection.tyreId,
                             removePurposeId: removePurposeId,
@@ -138,6 +136,8 @@ export const updateInspectionTyre = async (req: Request, res: Response) => {
         });
     } catch (error: any) {
         console.error("Failed to update inspection:", error);
-        res.status(500).json({ error: "Internal server error", message: error.message });
+        const status = error?.status || 500;
+        const message = error?.error || error?.message || 'Internal server error';
+        res.status(status).json({ error: message });
     }
 };

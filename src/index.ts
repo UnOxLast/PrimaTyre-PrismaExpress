@@ -14,7 +14,7 @@ const PORT = process.env.PORT || 8080;
 app.use((req, res, next) => {
     res.header("Access-Control-Allow-Origin", "*");
     res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, x-api-key");
-    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
     // Tangani preflight request langsung
     if (req.method === "OPTIONS") {
         res.sendStatus(200);
@@ -39,8 +39,8 @@ app.use('/inspection', inspectionRouter)
 app.use('/action', actionTyreRouter);
 app.use('/dropdown', dropdownRouter);
 
-app.get('/ping', (req, res) => {
-    res.status(200).json({ message: 'pong' });
+app.get('/', (req, res) => {
+    res.status(200).json({ message: 'Server is gud' });
 });
 
 app.listen(Number(PORT), '0.0.0.0', () => {

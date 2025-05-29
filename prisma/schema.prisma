@@ -101,7 +101,6 @@ model Tyre {
   updatedAt        DateTime @updatedAt
   hmTyre           Int?
   kmTyre           Int?
-  // isDeleted        Boolean  @default(false) // ← Soft delete flag
 
   installedUnit  Unit?          @relation("TyreInstalledUnit", fields: [installedUnitId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   removedPurpose RemovePurpose? @relation(fields: [removedPurposeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -118,6 +117,10 @@ model Tyre {
   unitTyre4   Unit?            @relation("UnitTyre4")
   unitTyre5   Unit?            @relation("UnitTyre5")
   unitTyre6   Unit?            @relation("UnitTyre6")
+
+  isDeleted Boolean   @default(false) // ← Soft delete flag
+  deletedAt DateTime? // ← Soft delete timestamp
+  deletedBy String? // ← Soft delete user
 }
 
 model StockTyre {

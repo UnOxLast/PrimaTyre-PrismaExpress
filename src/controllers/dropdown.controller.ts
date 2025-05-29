@@ -24,6 +24,7 @@ export const getAllDropdown = async (req: Request, res: Response) => {
                 // return [key, data];
                 if (key === "tyre") {
                     const data = await model.findMany({
+                        where: { isDeleted: false },
                         include: {
                             stockTyre: true,
                             // tyre: {
