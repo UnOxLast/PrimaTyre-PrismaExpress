@@ -12,7 +12,7 @@ async function main() {
     })
 
     // RoleUser
-    const roles = ['admin', 'TCM', 'TIS', 'inspector']
+    const roles = ['admin', 'TCMM', 'TISM', 'inspector']
     for (const name of roles) {
         await prisma.roleUser.upsert({
             where: { name },
@@ -22,12 +22,21 @@ async function main() {
     }
 
     // Site
-    const sites = ['TCM', 'TIS']
+    const sites = ['TCMM', 'TISM']
     for (const name of sites) {
         await prisma.site.upsert({
             where: { name },
             update: {},
             create: { name },
+        })
+    }
+
+    const tyreAmount = [2, 4, 6, 8, 10, 12, 20, 24]
+    for (const amount of tyreAmount) {
+        await prisma.unitTyreAmount.upsert({
+            where: { amount },
+            update: {},
+            create: { amount },
         })
     }
 

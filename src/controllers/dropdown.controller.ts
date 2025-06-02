@@ -10,6 +10,7 @@ const tableMap: Record<string, any> = {
     roleUser: prisma.roleUser,
     site: prisma.site,
     tyreSize: prisma.tyreSize,
+    unitTyreAmount: prisma.unitTyreAmount,
     merk: prisma.merk,
     unit: prisma.unit,
     tyre: prisma.tyre
@@ -22,7 +23,22 @@ export const getAllDropdown = async (req: Request, res: Response) => {
             Object.entries(tableMap).map(async ([key, model]) => {
                 // const data = await model.findMany();
                 // return [key, data];
-                if (key === "tyre") {
+                if (key === "unit") {
+                    const data = await model.findMany({
+                        include: {
+                            site: true,
+                            tyres: {
+                                include: {
+                                    tyre: {
+                                        include: { stockTyre: true }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                    return [key, data];
+                }
+                else if (key === "tyre") {
                     const data = await model.findMany({
                         where: { isDeleted: false },
                         include: {

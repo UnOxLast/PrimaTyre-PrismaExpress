@@ -120,123 +120,105 @@ export const createActivityTyre = async (req: Request, res: Response) => {
             manpower,
             dateTimeWork,
             dateTimeDone,
-            tyrePosition, // ← dari frontend
+            tyrePosition // posisi ban pada unit (1-based)
         } = req.body;
 
         const result = await prismaClient.$transaction(async (tx) => {
             // 1. Validasi Unit
             const unit = await tx.unit.findUnique({
                 where: { id: unitId },
-                select: {
-                    id: true,
-                    location: true,
-                    hmUnit: true,
-                    kmUnit: true,
-                    tyre1Id: true,
-                    tyre2Id: true,
-                    tyre3Id: true,
-                    tyre4Id: true,
-                    tyre5Id: true,
-                    tyre6Id: true,
+                include: {
+                    tyres: true // relasi ke UnitTyrePosition
                 }
             });
             if (!unit) throw new Error("Unit not found");
 
-            // 2. Tentukan posisi ban yang dilepas dari data unit
-            const tyreFields = ['tyre1Id', 'tyre2Id', 'tyre3Id', 'tyre4Id', 'tyre5Id', 'tyre6Id'];
-            const removedTyreIdNum = Number(removedTyreId);
-            let positionFromUnit: number | null = null;
+            // 2. Validasi posisi dan ban yang dilepas
+            let positionToUse = tyrePosition;
+            let removedPosition: number | undefined = undefined;
 
-            for (let i = 0; i < tyreFields.length; i++) {
-                const field = tyreFields[i] as keyof typeof unit;
-                const currentTyreId = unit[field];
-
-                if (currentTyreId === removedTyreIdNum) {
-                    // Ban dilepas ditemukan di posisi ini
-                    positionFromUnit = i + 1;
-                    break;
-                }
-
-                if (!currentTyreId && positionFromUnit === null) {
-                    // Jika belum dapat posisi, catat posisi kosong pertama
-                    positionFromUnit = i + 1;
-                }
-            }
-            if (positionFromUnit === null) {
-                throw new Error("Removed tyre is not currently installed in this unit");
+            if (removedTyreId) {
+                // Cari posisi ban yang dilepas pada unit
+                const pos = unit.tyres.find(
+                    (pos) => pos.tyreId === removedTyreId
+                );
+                if (!pos) throw new Error("Removed tyre is not currently installed in this unit");
+                removedPosition = pos.position === null ? undefined : pos.position;
+                // Jika posisi tidak diberikan, gunakan posisi dari DB
+                if (!positionToUse) positionToUse = removedPosition;
             }
 
-            // Pilih posisi ban:
-            const finalTyrePosition = positionFromUnit ?? tyrePosition ?? null;
-
-            // Siapkan data untuk update unit
-            const unitUpdateData: any = {};
-            if (unit.hmUnit !== hmAtActivity) unitUpdateData.hmUnit = hmAtActivity;
-            if (unit.kmUnit !== kmAtActivity) unitUpdateData.kmUnit = kmAtActivity;
-            if (location) {
-                if (unit.location !== location) {
-                    unitUpdateData.location = location;
-                }
-            } else {
-                unitUpdateData.location = unit.location;
+            // 3. Update posisi ban pada UnitTyrePosition
+            if (removedTyreId && positionToUse) {
+                // Kosongkan posisi lama (hapus atau set tyreId ke null)
+                await tx.unitTyrePosition.updateMany({
+                    where: { unitId, position: positionToUse, tyreId: removedTyreId },
+                    data: { tyreId: { set: null } }
+                });
             }
-
-            // Set posisi ban (dipasang atau dilepas)
-            if (finalTyrePosition) {
-                const fieldName = `tyre${finalTyrePosition}Id`;
-                unitUpdateData[fieldName] = installedTyreId ?? null;
-            }
-
-            if (Object.keys(unitUpdateData).length > 0) {
-                await tx.unit.update({
-                    where: { id: unitId },
-                    data: unitUpdateData,
+            if (installedTyreId && positionToUse) {
+                // Pasang ban baru di posisi tersebut
+                await tx.unitTyrePosition.upsert({
+                    where: {
+                        unitId_position: {
+                            unitId,
+                            position: positionToUse
+                        }
+                    },
+                    update: { tyreId: installedTyreId },
+                    create: {
+                        unitId,
+                        position: positionToUse,
+                        tyreId: installedTyreId
+                    }
                 });
             }
 
-            // Ambil data ban dilepas & dipasang
-            const removedTyre = removedTyreId ? await tx.tyre.findUnique({ where: { id: removedTyreId } }) : null;
-            const installedTyre = installedTyreId ? await tx.tyre.findUnique({ where: { id: installedTyreId } }) : null;
-
-            // Tentukan nilai tread akhir
-            const finalTread1Remove = tread1Remove ?? removedTyre?.tread1 ?? null;
-            const finalTread2Remove = tread2Remove ?? removedTyre?.tread2 ?? null;
-            const finalTread1Install = tread1Install ?? installedTyre?.tread1 ?? null;
-            const finalTread2Install = tread2Install ?? installedTyre?.tread2 ?? null;
-
-            // 3. Update status ban yang dilepas
+            // 4. Update status Tyre yang dilepas
             if (removedTyreId) {
                 await tx.tyre.update({
                     where: { id: removedTyreId },
                     data: {
-                        tread1: finalTread1Remove,
-                        tread2: finalTread2Remove,
-                        isReady: false, // nanti diganti ke false harus melalui inpeksi
+                        tread1: tread1Remove ?? undefined,
+                        tread2: tread2Remove ?? undefined,
+                        isReady: false,
                         isInstalled: false,
                         installedUnitId: null,
                         positionTyre: null,
                         removedPurposeId: removePurposeId
-                    },
+                    }
                 });
             }
 
-            // 4. Update status ban yang dipasang
+            // 5. Update status Tyre yang dipasang
             if (installedTyreId) {
                 await tx.tyre.update({
                     where: { id: installedTyreId },
                     data: {
-                        tread1: finalTread1Install,
-                        tread2: finalTread2Install,
+                        tread1: tread1Install ?? undefined,
+                        tread2: tread2Install ?? undefined,
                         isReady: false,
                         isInstalled: true,
                         installedUnitId: unitId,
-                        positionTyre: finalTyrePosition,
+                        positionTyre: positionToUse,
                         removedPurposeId: null
-                    },
+                    }
                 });
             }
 
-            // 5. Simpan log aktivitas
+            // 6. Update Unit jika ada perubahan HM/KM/Location
+            const unitUpdateData: any = {};
+            if (unit.hmUnit !== hmAtActivity) unitUpdateData.hmUnit = hmAtActivity;
+            if (unit.kmUnit !== kmAtActivity) unitUpdateData.kmUnit = kmAtActivity;
+            if (location && unit.location !== location) unitUpdateData.location = location;
+            if (Object.keys(unitUpdateData).length > 0) {
+                await tx.unit.update({
+                    where: { id: unitId },
+                    data: unitUpdateData
+                });
+            }
+
+            // 7. Simpan log aktivitas
             const newActivity = await tx.activityTyre.create({
                 data: {
                     unitId,
@@ -244,27 +226,28 @@ export const createActivityTyre = async (req: Request, res: Response) => {
                     kmAtActivity,
                     location: location || undefined,
                     removedTyreId,
-                    tread1Remove: finalTread1Remove,
-                    tread2Remove: finalTread2Remove,
+                    tread1Remove: tread1Remove ?? undefined,
+                    tread2Remove: tread2Remove ?? undefined,
                     removeReasonId,
                     removePurposeId,
                     installedTyreId,
-                    tread1Install: finalTread1Install,
-                    tread2Install: finalTread2Install,
+                    tread1Install: tread1Install ?? undefined,
+                    tread2Install: tread2Install ?? undefined,
                     airConditionId,
                     airPressure,
                     manpower,
                     dateTimeWork: new Date(dateTimeWork),
                     dateTimeDone: dateTimeDone ? new Date(dateTimeDone) : null,
-                    tyrePosition: finalTyrePosition,
-                },
+                    tyrePosition: positionToUse
+                }
             });
-            // 6. Jika ban dilepas, hitung total HM/KM pemakaian dan update ke ban
+
+            // 8. Jika ban dilepas, hitung total HM/KM pemakaian dan update ke ban
             if (removedTyreId) {
                 const allInstalled = await tx.activityTyre.findMany({
                     where: {
                         installedTyreId: removedTyreId,
-                        tyrePosition: finalTyrePosition,
+                        tyrePosition: positionToUse,
                         unitId: unitId,
                         hmAtActivity: { not: undefined },
                         kmAtActivity: { not: undefined }
@@ -275,7 +258,7 @@ export const createActivityTyre = async (req: Request, res: Response) => {
                 const allRemoved = await tx.activityTyre.findMany({
                     where: {
                         removedTyreId: removedTyreId,
-                        tyrePosition: finalTyrePosition,
+                        tyrePosition: positionToUse,
                         unitId: unitId,
                         hmAtActivity: { not: undefined },
                         kmAtActivity: { not: undefined }
@@ -319,16 +302,16 @@ export const createActivityTyre = async (req: Request, res: Response) => {
                 });
             }
 
+            // 9. Buat InspectionTyre untuk ban yang dilepas/dipasang
             let installDate: Date | undefined = undefined;
             let removeDate: Date | undefined = undefined;
 
             if (removedTyreId) {
-                // Cari activity sebelumnya yang memasang ban ini (untuk installDate)
                 const lastInstall = await tx.activityTyre.findFirst({
                     where: {
                         installedTyreId: removedTyreId,
                         unitId: unitId,
-                        tyrePosition: finalTyrePosition,
+                        tyrePosition: positionToUse,
                     },
                     orderBy: { dateTimeWork: 'desc' },
                 });
@@ -341,7 +324,6 @@ export const createActivityTyre = async (req: Request, res: Response) => {
                 installDate = dateTimeWork ? new Date(dateTimeWork) : new Date();
             }
 
-
             const tyreForInspection = removedTyreId
                 ? await tx.tyre.findUnique({ where: { id: removedTyreId } })
                 : installedTyreId
@@ -353,31 +335,16 @@ export const createActivityTyre = async (req: Request, res: Response) => {
                     data: {
                         tyreId: tyreForInspection.id,
                         activityTyreId: newActivity.id,
-                        unitId: newActivity.unitId || null, // atau ambil dari unit.number jika ada relasi
-                        positionTyre: finalTyrePosition,
-
-                        removeReason: undefined, // Bisa diisi dari removeReasonId jika lookup sudah ada
-                        removePurpose: undefined,
-
-                        treadRemaining: tyreForInspection.tread1 ?? undefined, // contoh pakai tread1
-                        treadValue: undefined,
-
+                        unitId: newActivity.unitId || null,
+                        positionTyre: positionToUse,
+                        treadRemaining: tyreForInspection.tread1 ?? undefined,
                         ageTotal: tyreForInspection.hmTyre,
                         installDate,
                         removeDate,
-
-                        ageFront: undefined,
-                        ageRear: undefined,
-
-                        incidentNote: null,
-                        analysisNote: null,
-
                         removePurposeId: removePurposeId ?? undefined,
-                        inspectedBy: null,
-
                         dateTimeIn: dateTimeWork ? new Date(dateTimeWork) : new Date(),
-                        dateTimeWork: undefined,
-                    },
+                        // ...field lain default/null
+                    }
                 });
             }
 

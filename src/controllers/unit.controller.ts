@@ -10,10 +10,15 @@ export const getAllUnit = async (req: Request, res: Response) => {
         const units = await unitClient.findMany({
             include: {
                 site: true,
+                UnitTyreAmount: true,
+                tyresInstalled: true
             }
         });
 
-
+        if (!units) {
+            res.status(404).json({ message: "No units found" });
+            return;
+        }
 
         res.status(200).json({ data: units });
     } catch (error) {
@@ -30,67 +35,20 @@ export const getUnitById = async (req: Request, res: Response) => {
             where: { id: unitId },
             include: {
                 site: true,
-                tyre1: {
+                tyres: {
                     include: {
-                        stockTyre: {
-                            select: {
-                                serialNumber: true,
-                            }
-                        },
+                        tyre: {
+                            include: { stockTyre: true }
+                        }
                     }
-                },
-                tyre2: {
-                    include: {
-                        stockTyre: {
-                            select: {
-                                serialNumber: true,
-                            }
-                        },
-                    }
-                },
-                tyre3: {
-                    include: {
-                        stockTyre: {
-                            select: {
-                                serialNumber: true,
-                            }
-                        },
-                    }
-                },
-                tyre4: {
-                    include: {
-                        stockTyre: {
-                            select: {
-                                serialNumber: true,
-                            }
-                        },
-                    }
-                },
-                tyre5: {
-                    include: {
-                        stockTyre: {
-                            select: {
-                                serialNumber: true,
-                            }
-                        },
-                    }
-                },
-                tyre6: {
-                    include: {
-                        stockTyre: {
-                            select: {
-                                serialNumber: true,
-                            }
-                        },
-                    }
-                },
-
+                }
             }
         });
 
-        // if (!unit) {
-        //     return res.status(404).json({ message: "Unit not found" });
-        // }
+        if (!unit) {
+            res.status(404).json({ message: "Unit not found" });
+            return
+        }
 
         res.status(200).json({ data: unit });
     } catch (error) {
@@ -132,91 +90,84 @@ export const createUnit = async (req: Request, res: Response) => {
             kmUnit,
             siteId,
             location,
-            tyreIds // Array: [tyre1Id, tyre2Id, ... up to 6]
+            unitTyreAmountId,
+            tyreIds
         } = req.body;
 
-        if (!nomorUnit || !siteId) {
-            res.status(400).json({ message: 'nomorUnit and siteId are required' });
-            return
+        if (!nomorUnit || !siteId || !unitTyreAmountId) {
+            res.status(400).json({ message: 'nomorUnit, siteId, and unitTyreAmountId are required' });
+            return;
         }
 
-        // Validasi: tidak boleh kosong atau null
-        if (!tyreIds || !Array.isArray(tyreIds) || tyreIds.length === 0) {
-            res.status(400).json({
-                message: 'tyreIds is required and cannot be empty'
-            })
-            return
+        if (!Array.isArray(tyreIds)) {
+            res.status(400).json({ message: 'tyreIds must be an array' });
+            return;
         }
 
-        if (tyreIds && tyreIds.length > 6) {
-            res.status(400).json({ message: 'You can only assign up to 6 tyres' });
-            return
+        const tyreAmountObj = await prismaClient.unitTyreAmount.findUnique({
+            where: { id: unitTyreAmountId }
+        });
+        if (!tyreAmountObj) {
+            res.status(400).json({ message: 'unitTyreAmountId not found' });
+            return;
         }
-
+        if (tyreIds.length !== tyreAmountObj.amount) {
+            res.status(400).json({ message: `tyreIds length must be ${tyreAmountObj.amount}` });
+            return;
+        }
 
         const unit = await prismaClient.$transaction(async (tx) => {
+            // Siapkan data create tanpa field undefined/nullable yang tidak perlu
+            const unitData: any = {
+                nomorUnit,
+                hmUnit: hmUnit ?? 0,
+                kmUnit: kmUnit ?? 0,
+                siteId,
+                unitTyreAmountId
+            };
+            if (location) unitData.location = location;
+
             // 1. Buat Unit
             const newUnit = await tx.unit.create({
-                data: {
-                    nomorUnit,
-                    hmUnit,
-                    kmUnit,
-                    siteId,
-                    location,
-                    tyre1Id: tyreIds?.[0] ?? null,
-                    tyre2Id: tyreIds?.[1] ?? null,
-                    tyre3Id: tyreIds?.[2] ?? null,
-                    tyre4Id: tyreIds?.[3] ?? null,
-                    tyre5Id: tyreIds?.[4] ?? null,
-                    tyre6Id: tyreIds?.[5] ?? null
-                }
+                data: unitData
             });
 
-            // 2. Update Tyre jika ada
-            if (tyreIds && tyreIds.length > 0) {
-                for (let i = 0; i < tyreIds.length; i++) {
-                    await tx.tyre.update({
-                        where: { id: tyreIds[i] },
-                        data: {
-                            isInstalled: true,
-                            isReady: false,
-                            installedUnitId: newUnit.id,
-                            positionTyre: i + 1
-                        }
-                    });
-                }
-            }
-
+            // 2. Buat UnitTyrePosition & activityTyre untuk setiap ban
             for (let i = 0; i < tyreIds.length; i++) {
                 const tyreId = tyreIds[i];
-                if (!tyreId) continue;
-
-                // Update Tyre
-                const currentTyre = await tx.tyre.findUnique({
-                    where: { id: tyreId },
-                    select: {
-                        tread1: true,
-                        tread2: true
+                await tx.unitTyrePosition.create({
+                    data: {
+                        unitId: newUnit.id,
+                        tyreId,
+                        position: i + 1
                     }
                 });
-
+                await tx.tyre.update({
+                    where: { id: tyreId },
+                    data: {
+                        isInstalled: true,
+                        isReady: false,
+                        positionTyre: i + 1,
+                        installedUnitId: newUnit.id
+                    }
+                });
+                const tyre = await tx.tyre.findUnique({
+                    where: { id: tyreId },
+                    select: { tread1: true, tread2: true }
+                });
                 await tx.activityTyre.create({
                     data: {
-                        location: newUnit.location,
                         unitId: newUnit.id,
-                        tyrePosition: i + 1,
-                        installedTyreId: tyreId,
                         hmAtActivity: hmUnit ?? 0,
                         kmAtActivity: kmUnit ?? 0,
-                        tread1Install: currentTyre?.tread1 ?? 0,
-                        tread2Install: currentTyre?.tread2 ?? 0,
-                        // Kosongkan tanggal, nanti diisi saat update aktivitas lanjutan
-                        dateTimeWork: null,
-                        dateTimeDone: null
+                        location: location ?? null,
+                        installedTyreId: tyreId,
+                        tread1Install: tyre?.tread1 ?? null,
+                        tread2Install: tyre?.tread2 ?? null,
+                        tyrePosition: i + 1,
                     }
                 });
             }
-
 
             return newUnit;
         });
@@ -228,29 +179,52 @@ export const createUnit = async (req: Request, res: Response) => {
 
         if (error.code === 'P2002') {
             res.status(409).json({ error: 'nomorUnit or tyre already assigned' });
-            return
+            return;
         }
 
         res.status(500).json({ error: 'Internal Server Error' });
     }
 };
 
-
 //updateUnit
 export const updateUnit = async (req: Request, res: Response) => {
     try {
         const unitId = Number(req.params.id)
-        const { nomorUnit, hmUnit, siteId, location } = req.body;
+        const { nomorUnit, hmUnit, siteId, location, kmUnit } = req.body;
+
+        // Ambil unit lama untuk cek perubahan siteId
+        const oldUnit = await unitClient.findUnique({
+            where: { id: unitId },
+            select: { siteId: true }
+        });
 
         const updatedUnit = await unitClient.update({
             where: { id: unitId },
             data: {
                 nomorUnit,
                 hmUnit,
+                kmUnit,
                 siteId,
                 location
             }
         });
+
+        // Jika siteId berubah, update siteId pada semua Tyre yang terpasang di unit ini
+        if (oldUnit && siteId && oldUnit.siteId !== siteId) {
+            // Ambil semua Tyre yang sedang terpasang di unit ini
+            const positions = await prismaClient.unitTyrePosition.findMany({
+                where: { unitId },
+                select: { tyreId: true }
+            });
+            const tyreIds = positions.map(pos => pos.tyreId).filter((id): id is number => id !== null);
+
+            if (tyreIds.length > 0) {
+                await prismaClient.tyre.updateMany({
+                    where: { id: { in: tyreIds } },
+                    data: { siteId }
+                });
+            }
+        }
 
         res.status(200).json({ message: "Unit updated", data: updatedUnit });
     } catch (error) {
@@ -275,5 +249,24 @@ export const deleteUnit = async (req: Request, res: Response) => {
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: "Failed to delete unit" });
+    }
+};
+
+// Mendapatkan semua ban pada unit beserta posisi
+export const getUnitTyres = async (req: Request, res: Response) => {
+    try {
+        const unitId = Number(req.params.id);
+        const positions = await prismaClient.unitTyrePosition.findMany({
+            where: { unitId },
+            orderBy: { position: 'asc' },
+            include: {
+                tyre: {
+                    include: { stockTyre: true }
+                }
+            }
+        });
+        res.status(200).json({ data: positions });
+    } catch (error) {
+        res.status(500).json({ message: "Failed to fetch unit tyres" });
     }
 };

@@ -102,25 +102,24 @@ model Tyre {
   hmTyre           Int?
   kmTyre           Int?
 
+  siteId Int?
+  site   Site? @relation(fields: [siteId], references: [id])
+
   installedUnit  Unit?          @relation("TyreInstalledUnit", fields: [installedUnitId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   removedPurpose RemovePurpose? @relation(fields: [removedPurposeId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   stockTyre      StockTyre      @relation(fields: [stockTyreId], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
-  installedActivities ActivityTyre[] @relation("InstalledTyre")
-  removedActivities   ActivityTyre[] @relation("RemovedTyre")
+  installedActivities ActivityTyre[]   @relation("InstalledTyre")
+  removedActivities   ActivityTyre[]   @relation("RemovedTyre")
+  inspections         InspectionTyre[]
+  actionTyre          ActionTyre[]
 
-  inspections InspectionTyre[]
-  actionTyre  ActionTyre[]
-  unitTyre1   Unit?            @relation("UnitTyre1")
-  unitTyre2   Unit?            @relation("UnitTyre2")
-  unitTyre3   Unit?            @relation("UnitTyre3")
-  unitTyre4   Unit?            @relation("UnitTyre4")
-  unitTyre5   Unit?            @relation("UnitTyre5")
-  unitTyre6   Unit?            @relation("UnitTyre6")
+  // Posisi ban pada unit (bisa banyak tergantung history pemasangan)
+  unitPositions UnitTyrePosition[]
 
-  isDeleted Boolean   @default(false) // ← Soft delete flag
-  deletedAt DateTime? // ← Soft delete timestamp
-  deletedBy String? // ← Soft delete user
+  isDeleted Boolean   @default(false)
+  deletedAt DateTime?
+  deletedBy String?
 }
 
 model StockTyre {
@@ -149,29 +148,39 @@ model TyreSize {
 model Unit {
   id        Int     @id @default(autoincrement())
   nomorUnit String  @unique
-  hmUnit    Int
-  kmUnit    Int
+  hmUnit    Int     @default(0)
+  kmUnit    Int     @default(0)
   siteId    Int
   location  String?
-
-  tyre1Id Int? @unique
-  tyre2Id Int? @unique
-  tyre3Id Int? @unique
-  tyre4Id Int? @unique
-  tyre5Id Int? @unique
-  tyre6Id Int? @unique
 
   site       Site           @relation(fields: [siteId], references: [id])
   activities ActivityTyre[]
 
-  tyre1 Tyre? @relation("UnitTyre1", fields: [tyre1Id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  tyre2 Tyre? @relation("UnitTyre2", fields: [tyre2Id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  tyre3 Tyre? @relation("UnitTyre3", fields: [tyre3Id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  tyre4 Tyre? @relation("UnitTyre4", fields: [tyre4Id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  tyre5 Tyre? @relation("UnitTyre5", fields: [tyre5Id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  tyre6 Tyre? @relation("UnitTyre6", fields: [tyre6Id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  // Konfigurasi jumlah ban
+  unitTyreAmountId Int?
+  UnitTyreAmount   UnitTyreAmount?    @relation(fields: [unitTyreAmountId], references: [id])
+  // Ban yang terpasang pada unit (melalui UnitTyrePosition)
+  tyres            UnitTyrePosition[]
 
   tyresInstalled Tyre[] @relation("TyreInstalledUnit")
+}
+
+model UnitTyrePosition {
+  id       Int  @id @default(autoincrement())
+  unitId   Int?
+  tyreId   Int?
+  position Int? // Posisi 1 s.d. N
+
+  unit Unit? @relation(fields: [unitId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tyre Tyre? @relation(fields: [tyreId], references: [id])
+
+  @@unique([unitId, position]) // 1 posisi hanya bisa diisi 1 ban
+}
+
+model UnitTyreAmount {
+  id     Int    @id @default(autoincrement())
+  amount Int    @unique
+  unit   Unit[]
 }
 
 model AirCondition {
@@ -218,6 +227,7 @@ model Site {
   id   Int    @id @default(autoincrement())
   name String @unique
   unit Unit[]
+  tyre Tyre[]
 }
 
 model User {

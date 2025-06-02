@@ -17,6 +17,7 @@ export const getAllTyre = async (req: Request, res: Response) => {
             where: { isDeleted: false },
             include: {
                 stockTyre: true,
+                site: true,
             },
         });
         res.status(200).json({ data: allTyresRaw });
@@ -102,11 +103,12 @@ export const createTyre = async (req: Request, res: Response) => {
             price,
             tyreSizeId,
             oHM,
-            oKM
+            oKM,
+            siteId
         } = req.body;
 
-        if (!serialNumber || !merkId || !tyreSizeId) {
-            res.status(400).json({ message: 'serialNumber, merkId, and tyreSizeId are required' });
+        if (!serialNumber || !merkId || !tyreSizeId || !siteId) {
+            res.status(400).json({ message: 'serialNumber, merkId, tyreSizeId, and siteId are required' });
             return;
         }
 
@@ -145,6 +147,7 @@ export const createTyre = async (req: Request, res: Response) => {
                     tread2: otd2,
                     hmTyre: oHM,
                     kmTyre: oKM,
+                    siteId,
                 },
                 include: {
                     stockTyre: true
@@ -186,7 +189,8 @@ export const updateStockTyre = async (req: Request, res: Response) => {
             price,
             tyreSizeId,
             oHM,
-            oKM
+            oKM,
+            siteId
         } = req.body;
 
         const stockTyreId = Number(id);
@@ -271,6 +275,7 @@ export const updateStockTyre = async (req: Request, res: Response) => {
                 data: {
                     hmTyre: finalHM,
                     kmTyre: finalKM,
+                    siteId: siteId, // Gunakan siteId dari StockTyre jika tidak diubah
                 }
             });
         }
