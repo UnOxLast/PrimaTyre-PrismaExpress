@@ -185,7 +185,8 @@ export const createActivityTyre = async (req: Request, res: Response) => {
                         isInstalled: false,
                         installedUnitId: null,
                         positionTyre: null,
-                        removedPurposeId: removePurposeId
+                        removedPurposeId: removePurposeId,
+                        dateTimeWork: new Date(dateTimeDone),
                     }
                 });
             }

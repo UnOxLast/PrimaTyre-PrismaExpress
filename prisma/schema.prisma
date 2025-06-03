@@ -87,18 +87,16 @@ model ActionTyre {
 }
 
 model Tyre {
-  id               Int      @id @default(autoincrement())
+  id               Int     @id @default(autoincrement())
   tread1           Float?
   tread2           Float?
-  isInstalled      Boolean  @default(false)
-  isReady          Boolean  @default(false)
-  isScrap          Boolean  @default(false)
+  isInstalled      Boolean @default(false)
+  isReady          Boolean @default(false)
+  isScrap          Boolean @default(false)
   positionTyre     Int?
   installedUnitId  Int?
   removedPurposeId Int?
-  stockTyreId      Int      @unique
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  stockTyreId      Int     @unique
   hmTyre           Int?
   kmTyre           Int?
 
@@ -117,26 +115,32 @@ model Tyre {
   // Posisi ban pada unit (bisa banyak tergantung history pemasangan)
   unitPositions UnitTyrePosition[]
 
+  dateTimeWork DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
   isDeleted Boolean   @default(false)
   deletedAt DateTime?
   deletedBy String?
 }
 
 model StockTyre {
-  id           Int      @id @default(autoincrement())
-  serialNumber String   @unique
-  merkId       Int
-  type         String?
-  pattern      String?
-  price        Int?
-  tyreSizeId   Int
-  otd1         Int?
-  otd2         Int?
-  oHM          Int?     @default(0)
-  oKM          Int?     @default(0)
-  merk         Merk     @relation(fields: [merkId], references: [id])
-  tyreSize     TyreSize @relation(fields: [tyreSizeId], references: [id])
-  tyre         Tyre?
+  id             Int       @id @default(autoincrement())
+  serialNumber   String    @unique
+  merkId         Int
+  type           String?
+  pattern        String?
+  price          Int?
+  tyreSizeId     Int
+  otd1           Int?
+  otd2           Int?
+  oHM            Int?      @default(0)
+  oKM            Int?      @default(0)
+  dateTimeIn     DateTime?
+  dateTimeUpdate DateTime?
+  merk           Merk      @relation(fields: [merkId], references: [id])
+  tyreSize       TyreSize  @relation(fields: [tyreSizeId], references: [id])
+  tyre           Tyre?
 }
 
 model TyreSize {
@@ -163,6 +167,12 @@ model Unit {
   tyres            UnitTyrePosition[]
 
   tyresInstalled Tyre[] @relation("TyreInstalledUnit")
+
+  dateTimeIn     DateTime?
+  dateTimeUpdate DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime? @updatedAt
 }
 
 model UnitTyrePosition {

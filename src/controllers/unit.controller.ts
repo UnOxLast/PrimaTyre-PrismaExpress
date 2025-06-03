@@ -190,7 +190,7 @@ export const createUnit = async (req: Request, res: Response) => {
 export const updateUnit = async (req: Request, res: Response) => {
     try {
         const unitId = Number(req.params.id)
-        const { nomorUnit, hmUnit, siteId, location, kmUnit } = req.body;
+        const { nomorUnit, hmUnit, siteId, location, kmUnit, dateTimeUpdate } = req.body;
 
         // Ambil unit lama untuk cek perubahan siteId
         const oldUnit = await unitClient.findUnique({
@@ -205,7 +205,8 @@ export const updateUnit = async (req: Request, res: Response) => {
                 hmUnit,
                 kmUnit,
                 siteId,
-                location
+                location,
+                dateTimeUpdate: new Date(dateTimeUpdate) ?? new Date() // Gunakan waktu sekarang jika dateTimeUpdate tidak diberikan
             }
         });
 

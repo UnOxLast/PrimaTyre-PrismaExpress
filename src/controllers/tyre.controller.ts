@@ -104,7 +104,8 @@ export const createTyre = async (req: Request, res: Response) => {
             tyreSizeId,
             oHM,
             oKM,
-            siteId
+            siteId,
+            dateTimeIn
         } = req.body;
 
         if (!serialNumber || !merkId || !tyreSizeId || !siteId) {
@@ -136,6 +137,7 @@ export const createTyre = async (req: Request, res: Response) => {
                     tyreSizeId,
                     oHM: oHM ?? 0,
                     oKM: oKM ?? 0,
+                    dateTimeIn: dateTimeIn ? new Date(dateTimeIn) : new Date(), //
                 }
             });
 
@@ -190,7 +192,8 @@ export const updateStockTyre = async (req: Request, res: Response) => {
             tyreSizeId,
             oHM,
             oKM,
-            siteId
+            siteId,
+            dateTimeUpdate
         } = req.body;
 
         const stockTyreId = Number(id);
@@ -228,6 +231,7 @@ export const updateStockTyre = async (req: Request, res: Response) => {
                 tyreSizeId,
                 oHM,
                 oKM,
+                dateTimeUpdate: new Date(dateTimeUpdate) ?? new Date(),
             },
         });
 
