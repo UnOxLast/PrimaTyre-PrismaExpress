@@ -206,7 +206,7 @@ export const updateUnit = async (req: Request, res: Response) => {
                 kmUnit,
                 siteId,
                 location,
-                dateTimeUpdate: new Date(dateTimeUpdate) ?? new Date() // Gunakan waktu sekarang jika dateTimeUpdate tidak diberikan
+                dateTimeUpdate: new Date() // Gunakan waktu sekarang jika dateTimeUpdate tidak diberikan
             }
         });
 
