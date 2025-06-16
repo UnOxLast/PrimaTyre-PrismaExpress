@@ -3,7 +3,7 @@ import { exportActivityToExcel } from "../controllers/activity.controller";
 
 const exportRouter = Router();
 
-exportRouter.get("/", exportActivityToExcel);
+exportRouter.post("/", exportActivityToExcel);
 
 
 export default module.exports = exportRouter;
