@@ -7,6 +7,7 @@ import dropdownRouter from './routes/dropdown.router';
 import { apiKeyDbAuth } from "./middlewares/apikey.middleware"; // disarankan pindahkan ke folder `middlewares`
 import inspectionRouter from './routes/inspection.router';
 import actionTyreRouter from './routes/actionTyre.router';
+import exportRouter from './routes/export.router';
 
 const app = express();
 const PORT = process.env.PORT || 8080;
@@ -37,6 +38,7 @@ app.use('/user', userRouter);
 app.use('/activity', activityRouter);
 app.use('/inspection', inspectionRouter)
 app.use('/action', actionTyreRouter);
+app.use('/export', exportRouter)
 app.use('/dropdown', dropdownRouter);
 
 app.get('/', (req, res) => {

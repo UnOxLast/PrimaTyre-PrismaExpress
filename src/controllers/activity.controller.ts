@@ -1,5 +1,6 @@
 import { PrismaClient, Tyre } from "@prisma/client";
 import { Request, Response } from "express";
+import ExcelJS from 'exceljs'
 
 
 const activityClient = new PrismaClient().activityTyre;
@@ -202,7 +203,8 @@ export const createActivityTyre = async (req: Request, res: Response) => {
                         isInstalled: true,
                         installedUnitId: unitId,
                         positionTyre: positionToUse,
-                        removedPurposeId: null
+                        removedPurposeId: null,
+                        // dateTimeWork: dateTimeDone
                     }
                 });
             }
@@ -358,6 +360,285 @@ export const createActivityTyre = async (req: Request, res: Response) => {
         res.status(500).json({ error: "Internal server error", message: error.message });
     }
 };
+
+//exportActivityToExcel
+export const exportActivityToExcel = async (req: Request, res: Response) => {
+    try {
+        const { siteId, startDate, endDate, role } = req.body;
+
+        // Validasi input
+        if (role !== 'admin' && !siteId) {
+            res.status(400).json({ error: 'siteId is required for non-admin roles' });
+            return;
+        }
+
+        const filters: any = {};
+        if (role !== 'admin') {
+            filters.unit = { siteId: Number(siteId) };
+        }
+
+        // Jika tanggal tidak diberikan, gunakan hari ini
+        const today = new Date();
+        if (!startDate || !endDate) {
+            filters.dateTimeWork = {
+                gte: new Date(today.setHours(0, 0, 0, 0)), // Awal hari ini
+                lte: new Date(today.setHours(23, 59, 59, 999)), // Akhir hari ini
+            };
+        } else {
+            filters.dateTimeWork = {
+                gte: new Date(startDate as string),
+                lte: new Date(endDate as string),
+            };
+        }
+
+        const activities = await activityClient.findMany({
+            where: filters,
+            include: {
+                unit: { include: { site: true } },
+                removedTyre: {
+                    include: {
+                        stockTyre: {
+                            include: { merk: true, tyreSize: true }
+                        }
+                    }
+                },
+                installedTyre: {
+                    include: {
+                        stockTyre: {
+                            include: { merk: true, tyreSize: true }
+                        }
+                    }
+                },
+                removeReason: true,
+                removePurpose: true,
+                airCondition: true,
+            }
+        });
+
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('ActivityTyre')
+
+
+        // Merge kolom header utama
+        worksheet.mergeCells('A1:A2'); // SITE
+        worksheet.mergeCells('B1:B2'); // TANGGAL JAM PENGERJAAN
+        worksheet.mergeCells('C1:C2'); // NOMOR UNIT
+        worksheet.mergeCells('D1:D2'); // HM UNIT
+        worksheet.mergeCells('E1:E2'); // LOKASI
+        worksheet.mergeCells('F1:F2'); // POSISI TYRE
+
+        worksheet.mergeCells('G1:M1'); // REMOVE group
+        worksheet.mergeCells('N1:T1'); // INSTALL group
+
+        worksheet.mergeCells('U1:U2'); // MANPOWER
+        worksheet.mergeCells('V1:V2'); // TANGGAL JAM SELESAI
+
+        // Header utama (baris 1)
+        worksheet.getCell('A1').value = 'SITE'
+        worksheet.getCell('B1').value = 'TANGGAL JAM PENGERJAAN'
+        worksheet.getCell('C1').value = 'NOMOR UNIT'
+        worksheet.getCell('D1').value = 'HM UNIT'
+        worksheet.getCell('E1').value = 'LOKASI'
+        worksheet.getCell('F1').value = 'POSISI TYRE'
+        worksheet.getCell('G1').value = 'REMOVE TYRE'
+        worksheet.getCell('N1').value = 'INSTALL TYRE'
+        worksheet.getCell('U1').value = 'MANPOWER'
+        worksheet.getCell('V1').value = 'TANGGAL JAM SELESAI'
+
+        //'SN', 'SIZE', 'MERK & PATTERN', 'TREAD', 'HM/KM', 'ALASAN DILEPAS', 'DIPOSISIKAN UNTUK',
+        //     'SN', 'SIZE', 'MERK & PATTERN', 'TREAD', 'HM/KM', 'PSI', 'KONDISI TEKANAN',
+        // Sub-header (baris 2)
+        const removeHeaders = [
+            'SN TYRE', 'SIZE TYRE',
+            'MERK & PATTERN TYRE', 'TREAD TYRE', 'HM/KM TYRE',
+            'ALASAN DILEPAS', 'DISPOSISI UNTUK'
+        ]
+        removeHeaders.forEach((text, i) => {
+            worksheet.getCell(2, 7 + i).value = text // Kolom I (9) sampai Q (17)
+        })
+
+        const installHeaders = [
+            'SN TYRE', 'SIZE TYRE', 'MERK & PATTERN TYRE',
+            'TREAD TYRE', 'HM/KM TYRE', 'KONDISI TEKANAN ANGIN', 'PRESSURE (Psi)'
+        ]
+        installHeaders.forEach((text, i) => {
+            worksheet.getCell(2, 14 + i).value = text // Kolom R (18) sampai X (24)
+        })
+            ;['G1'].forEach((cell) => {
+                worksheet.getCell(cell).alignment = { vertical: 'middle', horizontal: 'center' }
+                worksheet.getCell(cell).font = { bold: true, color: { argb: 'FFFFFFFF' } }
+                worksheet.getCell(cell).fill = {
+                    type: 'pattern',
+                    pattern: 'solid',
+                    fgColor: { argb: 'FF3333' } // merah gelap
+                }
+            })
+            ;['N1'].forEach((cell) => {
+                worksheet.getCell(cell).alignment = { vertical: 'middle', horizontal: 'center' }
+                worksheet.getCell(cell).font = { bold: true, color: { argb: 'FFFFFFFF' } }
+                worksheet.getCell(cell).fill = {
+                    type: 'pattern',
+                    pattern: 'solid',
+                    fgColor: { argb: '228B22' } // merah gelap
+                }
+            })
+
+        const allBorders = {
+            top: { style: 'thin' as ExcelJS.BorderStyle },
+            left: { style: 'thin' as ExcelJS.BorderStyle },
+            bottom: { style: 'thin' as ExcelJS.BorderStyle },
+            right: { style: 'thin' as ExcelJS.BorderStyle },
+        };
+
+        // // Header styling
+        worksheet.getRow(1).eachCell((cell) => {
+            cell.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+            cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
+            // cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4F81BD' } } // biru
+            cell.border = allBorders
+        })
+        worksheet.getRow(2).eachCell((cell) => {
+            cell.font = { bold: true }
+            cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true }
+            // cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9E1F2' } } // ungu muda
+            cell.border = allBorders
+        })
+
+        worksheet.columns = [
+            { key: 'site', width: 15 },
+            { key: 'dateTimeWork', width: 25 },
+            { key: 'nomorUnit', width: 20 },
+            { key: 'hmUnit', width: 10 },
+            { key: 'location', width: 15 },
+            { key: 'tyrePosition', width: 15 },
+
+            // REMOVE
+            { key: 'removeSN', width: 20 },
+            { key: 'removeSize', width: 15 },
+            { key: 'removeMerk', width: 30 },
+            { key: 'removeTread', width: 15 },
+            { key: 'removeHMKM', width: 20 },
+            { key: 'removeReason', width: 20 },
+            { key: 'removePurpose', width: 25 },
+
+            // INSTALL
+            { key: 'installSN', width: 20 },
+            { key: 'installSize', width: 15 },
+            { key: 'installMerk', width: 30 },
+            { key: 'installTread', width: 15 },
+            { key: 'installHMKM', width: 20 },
+            { key: 'airPressure', width: 20 },
+            { key: 'airCondition', width: 20 },
+
+            { key: 'manpower', width: 20 },
+            { key: 'dateTimeDone', width: 25 },
+        ]
+
+
+
+
+
+
+        // worksheet.getRow(1).height = 25
+        // worksheet.getRow(2).height = 20
+
+        // //header
+        // worksheet.getCell('A1').value = 'SITE'
+        // worksheet.getCell('B1').value = 'TANGGAL JAM PENGERJAAN'
+        // worksheet.getCell('C1').value = 'NOMOR UNIT'
+        // worksheet.getCell('D1').value = 'HM UNIT'
+        // worksheet.getCell('E1').value = 'LOKASI'
+        // worksheet.getCell('F1').value = 'POSISI TYRE'
+        // worksheet.getCell('U1').value = 'MANPOWER'
+        // worksheet.getCell('V1').value = 'TANGGAL JAM SELESAI'
+
+        // // Header Group Labels (bold, caps, colored)
+        // worksheet.getCell('G1').value = 'REMOVE'
+        // worksheet.getCell('N1').value = 'INSTALL'
+
+
+
+        // // Sub-headers (baris ke-2)
+        // worksheet.getRow(2).values = [
+        //     '',
+        //     '',
+        //     '',
+        //     '',
+        //     '',
+        //     'SN', 'SIZE', 'MERK & PATTERN', 'TREAD', 'HM/KM', 'ALASAN DILEPAS', 'DIPOSISIKAN UNTUK',
+        //     'SN', 'SIZE', 'MERK & PATTERN', 'TREAD', 'HM/KM', 'PSI', 'KONDISI TEKANAN',
+        //     '', ''
+        // ]
+
+
+
+        // // ExcelJS BorderStyle expects specific string literals, not just any string.
+        // // Use 'thin' as type: BorderStyle
+        // const allBorders = {
+        //     top: { style: 'thin' as ExcelJS.BorderStyle },
+        //     left: { style: 'thin' as ExcelJS.BorderStyle },
+        //     bottom: { style: 'thin' as ExcelJS.BorderStyle },
+        //     right: { style: 'thin' as ExcelJS.BorderStyle },
+        // };
+        // // Style baris sub-header
+        // worksheet.getRow(1).eachCell((cell) => {
+        //     cell.border = allBorders
+        // })
+        // worksheet.getRow(2).eachCell((cell) => {
+        //     cell.border = allBorders
+        //     cell.alignment = { vertical: 'middle', horizontal: 'center' }
+        //     cell.font = { bold: true }
+        //     cell.fill = {
+        //         type: 'pattern',
+        //         pattern: 'solid',
+        //         fgColor: { argb: 'FFE5E5E5' } // abu terang
+        //     }
+        // })
+
+
+        activities.forEach((activity) => {
+            const row = {
+                site: activity.unit?.site?.name,
+                dateTimeWork: activity.dateTimeWork,
+                nomorUnit: activity.unit?.nomorUnit,
+                hmUnit: activity.hmAtActivity,
+                location: activity.location,
+                tyrePosition: activity.tyrePosition,
+
+                removeSN: activity.removedTyre?.stockTyre?.serialNumber || '',
+                removeSize: activity.removedTyre?.stockTyre?.tyreSize?.size || '',
+                removeMerk: `${activity.removedTyre?.stockTyre?.merk?.name || ''} - ${activity.removedTyre?.stockTyre?.pattern || ''}`,
+                removeTread: `${activity.tread1Remove || ''}/${activity.tread2Remove || ''}`,
+                removeHMKM: `${activity.removedTyre?.hmTyre || ''}/${activity.removedTyre?.kmTyre || ''}`,
+                removeReason: activity.removeReason?.description || '',
+                removePurpose: activity.removePurpose?.name || '',
+
+                installSN: activity.installedTyre?.stockTyre?.serialNumber || '',
+                installSize: activity.installedTyre?.stockTyre?.tyreSize?.size || '',
+                installMerk: `${activity.installedTyre?.stockTyre?.merk?.name || ''} - ${activity.installedTyre?.stockTyre?.pattern || ''}`,
+                installTread: `${activity.tread1Install || ''}/${activity.tread2Install || ''}`,
+                installHMKM: `${activity.installedTyre?.hmTyre || '0'}/${activity.installedTyre?.kmTyre || '0'}`,
+                airPressure: activity.airPressure || '',
+                airCondition: activity.airCondition?.name || '',
+
+                manpower: activity.manpower || '',
+                dateTimeDone: activity.dateTimeDone || '',
+            }
+
+            worksheet.addRow(row)
+        })
+
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        res.setHeader('Content-Disposition', 'attachment; filename=activity_tyre.xlsx')
+
+        await workbook.xlsx.write(res)
+        res.end()
+    } catch (error) {
+        console.error(error)
+        res.status(500).json({ error: 'Gagal membuat file Excel' })
+    }
+}
+
 
 
 
