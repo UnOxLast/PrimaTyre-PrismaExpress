@@ -370,16 +370,16 @@ export const createActivityTyre = async (req: Request, res: Response) => {
 //exportActivityToExcel
 export const exportActivityToExcel = async (req: Request, res: Response) => {
     try {
-        const { siteId, startDate, endDate, role } = req.body;
+        const { siteId, startDate, endDate, roleId } = req.body;
 
         // Validasi input
-        if (role !== 'admin' && !siteId) {
+        if (roleId !== 1 && !siteId) {
             res.status(400).json({ error: 'siteId is required for non-admin roles' });
             return;
         }
 
         const filters: any = {};
-        if (role !== 'admin') {
+        if (roleId !== 1) {
             filters.unit = { siteId: Number(siteId) };
         }
 
