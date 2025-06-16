@@ -133,7 +133,7 @@ export const createTyre = async (req: Request, res: Response) => {
                     pattern,
                     otd1,
                     otd2,
-                    price,
+                    price: price ?? 0,
                     tyreSizeId,
                     oHM: oHM ?? 0,
                     oKM: oKM ?? 0,

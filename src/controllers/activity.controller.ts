@@ -1,6 +1,7 @@
 import { PrismaClient, Tyre } from "@prisma/client";
 import { Request, Response } from "express";
-import ExcelJS from 'exceljs'
+import ExcelJS from 'exceljs';
+import { formatInTimeZone } from 'date-fns-tz'; // Install date-fns-tz if not already installed
 
 
 const activityClient = new PrismaClient().activityTyre;
@@ -139,10 +140,7 @@ export const createActivityTyre = async (req: Request, res: Response) => {
             let removedPosition: number | undefined = undefined;
 
             if (removedTyreId) {
-                // Cari posisi ban yang dilepas pada unit
-                const pos = unit.tyres.find(
-                    (pos) => pos.tyreId === removedTyreId
-                );
+                const pos = unit.tyres.find((pos) => pos.tyreId === removedTyreId);
                 if (!pos) throw new Error("Removed tyre is not currently installed in this unit");
                 removedPosition = pos.position === null ? undefined : pos.position;
                 // Jika posisi tidak diberikan, gunakan posisi dari DB
@@ -175,13 +173,22 @@ export const createActivityTyre = async (req: Request, res: Response) => {
                 });
             }
 
-            // 4. Update status Tyre yang dilepas
+            // 4. Ambil data tread dari Tyre jika tidak diisi
+            const removedTyre = removedTyreId
+                ? await tx.tyre.findUnique({ where: { id: removedTyreId }, select: { tread1: true, tread2: true } })
+                : null;
+
+            const installedTyre = installedTyreId
+                ? await tx.tyre.findUnique({ where: { id: installedTyreId }, select: { tread1: true, tread2: true } })
+                : null;
+
+            // 5. Update status Tyre yang dilepas
             if (removedTyreId) {
                 await tx.tyre.update({
                     where: { id: removedTyreId },
                     data: {
-                        tread1: tread1Remove ?? undefined,
-                        tread2: tread2Remove ?? undefined,
+                        tread1: tread1Remove ?? removedTyre?.tread1 ?? undefined,
+                        tread2: tread2Remove ?? removedTyre?.tread2 ?? undefined,
                         isReady: false,
                         isInstalled: false,
                         installedUnitId: null,
@@ -192,19 +199,18 @@ export const createActivityTyre = async (req: Request, res: Response) => {
                 });
             }
 
-            // 5. Update status Tyre yang dipasang
+            // 6. Update status Tyre yang dipasang
             if (installedTyreId) {
                 await tx.tyre.update({
                     where: { id: installedTyreId },
                     data: {
-                        tread1: tread1Install ?? undefined,
-                        tread2: tread2Install ?? undefined,
+                        tread1: tread1Install ?? installedTyre?.tread1 ?? undefined,
+                        tread2: tread2Install ?? installedTyre?.tread2 ?? undefined,
                         isReady: false,
                         isInstalled: true,
                         installedUnitId: unitId,
                         positionTyre: positionToUse,
                         removedPurposeId: null,
-                        // dateTimeWork: dateTimeDone
                     }
                 });
             }
@@ -229,13 +235,13 @@ export const createActivityTyre = async (req: Request, res: Response) => {
                     kmAtActivity,
                     location: location || undefined,
                     removedTyreId,
-                    tread1Remove: tread1Remove ?? undefined,
-                    tread2Remove: tread2Remove ?? undefined,
+                    tread1Remove: tread1Remove ?? removedTyre?.tread1 ?? undefined,
+                    tread2Remove: tread2Remove ?? removedTyre?.tread2 ?? undefined,
                     removeReasonId,
                     removePurposeId,
                     installedTyreId,
-                    tread1Install: tread1Install ?? undefined,
-                    tread2Install: tread2Install ?? undefined,
+                    tread1Install: tread1Install ?? installedTyre?.tread1 ?? undefined,
+                    tread2Install: tread2Install ?? installedTyre?.tread2 ?? undefined,
                     airConditionId,
                     airPressure,
                     manpower,
@@ -379,10 +385,16 @@ export const exportActivityToExcel = async (req: Request, res: Response) => {
 
         // Jika tanggal tidak diberikan, gunakan hari ini
         const today = new Date();
-        if (!startDate || !endDate) {
+        if (!startDate && !endDate) {
             filters.dateTimeWork = {
                 gte: new Date(today.setHours(0, 0, 0, 0)), // Awal hari ini
                 lte: new Date(today.setHours(23, 59, 59, 999)), // Akhir hari ini
+            };
+        } else if (startDate && !endDate) {
+            const start = new Date(startDate as string);
+            filters.dateTimeWork = {
+                gte: new Date(start.setHours(0, 0, 0, 0)), // Awal hari
+                lte: new Date(start.setHours(23, 59, 59, 999)), // Akhir hari
             };
         } else {
             filters.dateTimeWork = {
@@ -416,7 +428,7 @@ export const exportActivityToExcel = async (req: Request, res: Response) => {
         });
 
         const workbook = new ExcelJS.Workbook();
-        const worksheet = workbook.addWorksheet('ActivityTyre')
+        const worksheet = workbook.addWorksheet('ActivityTyre');
 
 
         // Merge kolom header utama
@@ -505,33 +517,33 @@ export const exportActivityToExcel = async (req: Request, res: Response) => {
         })
 
         worksheet.columns = [
-            { key: 'site', width: 15 },
-            { key: 'dateTimeWork', width: 25 },
-            { key: 'nomorUnit', width: 20 },
-            { key: 'hmUnit', width: 10 },
-            { key: 'location', width: 15 },
-            { key: 'tyrePosition', width: 15 },
+            { key: 'site', width: 15, style: { alignment: { vertical: 'middle', horizontal: 'center' } } },
+            { key: 'dateTimeWork', width: 25, style: { alignment: { vertical: 'middle', horizontal: 'center' } } }, // TANGGAL JAM PENGERJAAN
+            { key: 'nomorUnit', width: 20, style: { alignment: { vertical: 'middle', horizontal: 'center' } } }, // NOMOR UNIT
+            { key: 'hmUnit', width: 10, style: { alignment: { vertical: 'middle', horizontal: 'center' } } }, // HM UNIT
+            { key: 'location', width: 15, style: { alignment: { vertical: 'middle', horizontal: 'center' } } }, // LOKASI
+            { key: 'tyrePosition', width: 15, style: { alignment: { vertical: 'middle', horizontal: 'center' } } }, // POSISI TYRE
 
             // REMOVE
-            { key: 'removeSN', width: 20 },
-            { key: 'removeSize', width: 15 },
-            { key: 'removeMerk', width: 30 },
-            { key: 'removeTread', width: 15 },
-            { key: 'removeHMKM', width: 20 },
-            { key: 'removeReason', width: 20 },
-            { key: 'removePurpose', width: 25 },
+            { key: 'removeSN', width: 20, style: { alignment: { vertical: 'middle', horizontal: 'center' } } },
+            { key: 'removeSize', width: 15, style: { alignment: { vertical: 'middle', horizontal: 'center' } } },
+            { key: 'removeMerk', width: 30, style: { alignment: { vertical: 'middle', horizontal: 'center' } } },
+            { key: 'removeTread', width: 15, style: { alignment: { vertical: 'middle', horizontal: 'center' } } },
+            { key: 'removeHMKM', width: 20, style: { alignment: { vertical: 'middle', horizontal: 'center' } } },
+            { key: 'removeReason', width: 20, style: { alignment: { vertical: 'middle', horizontal: 'center' } } },
+            { key: 'removePurpose', width: 25, style: { alignment: { vertical: 'middle', horizontal: 'center' } } },
 
             // INSTALL
-            { key: 'installSN', width: 20 },
-            { key: 'installSize', width: 15 },
-            { key: 'installMerk', width: 30 },
-            { key: 'installTread', width: 15 },
-            { key: 'installHMKM', width: 20 },
-            { key: 'airPressure', width: 20 },
-            { key: 'airCondition', width: 20 },
+            { key: 'installSN', width: 20, style: { alignment: { vertical: 'middle', horizontal: 'center' } } },
+            { key: 'installSize', width: 15, style: { alignment: { vertical: 'middle', horizontal: 'center' } } },
+            { key: 'installMerk', width: 30, style: { alignment: { vertical: 'middle', horizontal: 'center' } } },
+            { key: 'installTread', width: 15, style: { alignment: { vertical: 'middle', horizontal: 'center' } } },
+            { key: 'installHMKM', width: 20, style: { alignment: { vertical: 'middle', horizontal: 'center' } } },
+            { key: 'airPressure', width: 20, style: { alignment: { vertical: 'middle', horizontal: 'center' } } },
+            { key: 'airCondition', width: 20, style: { alignment: { vertical: 'middle', horizontal: 'center' } } },
 
-            { key: 'manpower', width: 20 },
-            { key: 'dateTimeDone', width: 25 },
+            { key: 'manpower', width: 20, style: { alignment: { vertical: 'middle', horizontal: 'center' } } },
+            { key: 'dateTimeDone', width: 25, style: { alignment: { vertical: 'middle', horizontal: 'center' } } },
         ]
 
 
@@ -597,9 +609,14 @@ export const exportActivityToExcel = async (req: Request, res: Response) => {
 
 
         activities.forEach((activity) => {
+            const formatDateTime = (date: Date | null | undefined) => {
+                if (!date) return '';
+                return formatInTimeZone(date, 'Asia/Jakarta', 'yyyy-MM-dd HH:mm:ss');
+            };
+
             const row = {
                 site: activity.unit?.site?.name,
-                dateTimeWork: activity.dateTimeWork,
+                dateTimeWork: formatDateTime(activity.dateTimeWork), // Format to Jakarta timezone
                 nomorUnit: activity.unit?.nomorUnit,
                 hmUnit: activity.hmAtActivity,
                 location: activity.location,
@@ -622,22 +639,22 @@ export const exportActivityToExcel = async (req: Request, res: Response) => {
                 airCondition: activity.airCondition?.name || '',
 
                 manpower: activity.manpower || '',
-                dateTimeDone: activity.dateTimeDone || '',
-            }
+                dateTimeDone: formatDateTime(activity.dateTimeDone), // Format to Jakarta timezone
+            };
 
-            worksheet.addRow(row)
-        })
+            worksheet.addRow(row);
+        });
 
-        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-        res.setHeader('Content-Disposition', 'attachment; filename=activity_tyre.xlsx')
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', 'attachment; filename=activity_tyre.xlsx');
 
-        await workbook.xlsx.write(res)
-        res.end()
+        await workbook.xlsx.write(res);
+        res.end();
     } catch (error) {
-        console.error(error)
-        res.status(500).json({ error: 'Gagal membuat file Excel' })
+        console.error(error);
+        res.status(500).json({ error: 'Gagal membuat file Excel' });
     }
-}
+};
 
 
 
