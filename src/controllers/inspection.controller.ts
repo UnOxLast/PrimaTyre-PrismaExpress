@@ -74,25 +74,25 @@ export const updateInspectionTyre = async (req: Request, res: Response) => {
                 }
             });
 
+            const purpose = await tx.removePurpose.findUnique({
+                where: { id: removePurposeId }
+            });
+
+            if (!purpose) {
+                res.status(400).json({ error: 'Invalid removePurposeId' });
+                return;
+            }
             if (isReady) {
+                const isSpare = purpose.name.toLowerCase() === 'spare';
                 await tx.tyre.update({
                     where: { id: inspection.tyreId },
                     data: {
                         isReady: true,
                         isScrap: false,
-                        removedPurposeId: null,
+                        removedPurposeId: isSpare ? purpose.id : null // Jika spare, set removedPurposeId, jika tidak, null
                     }
                 });
             } else {
-                const purpose = await tx.removePurpose.findUnique({
-                    where: { id: removePurposeId }
-                });
-
-                if (!purpose) {
-                    res.status(400).json({ error: 'Invalid removePurposeId' });
-                    return;
-                }
-
                 const isScrap = purpose.name.toLowerCase() === 'scrap';
 
                 await tx.tyre.update({
