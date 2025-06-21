@@ -8,21 +8,31 @@ import { apiKeyDbAuth } from "./middlewares/apikey.middleware"; // disarankan pi
 import inspectionRouter from './routes/inspection.router';
 import actionTyreRouter from './routes/actionTyre.router';
 import exportRouter from './routes/export.router';
-
+import cors from 'cors';
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-app.use((req, res, next) => {
-    res.header("Access-Control-Allow-Origin", "*");
-    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, x-api-key");
-    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
-    // Tangani preflight request langsung
-    if (req.method === "OPTIONS") {
-        res.sendStatus(200);
-        return
-    }
-    next();
-});
+
+
+
+// Middleware CORS
+app.use(cors({
+    origin: '*', // Ganti dengan domain frontend untuk production
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
+    allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'x-api-key', 'ngrok-skip-browser-warning']
+}))
+
+// app.use((req, res, next) => {
+//     res.header("Access-Control-Allow-Origin", "*");
+//     res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, x-api-key, ngrok-skip-browser-warning");
+//     res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
+//     // Tangani preflight request langsung
+//     if (req.method === "OPTIONS") {
+//         res.sendStatus(200);
+//         return
+//     }
+//     next();
+// });
 
 // const apiKeyMiddleware = (req: Request, res: Response, next: NextFunction) => {
 //     if (req.path === "/ping") return next();
