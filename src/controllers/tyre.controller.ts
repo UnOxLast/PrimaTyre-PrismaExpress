@@ -196,12 +196,23 @@ export const updateStockTyre = async (req: Request, res: Response) => {
             dateTimeUpdate
         } = req.body;
 
-        const stockTyreId = Number(id);
-        if (isNaN(stockTyreId)) {
-            res.status(400).json({ message: 'Invalid stockTyre ID' });
+        const tyreId = Number(id);
+        if (isNaN(tyreId)) {
+            res.status(400).json({ message: 'Invalid Tyre ID' });
+            return
+        }
+
+        const tyre = await prismaClient.tyre.findUnique({
+            where: { id: tyreId },
+            select: { stockTyreId: true }
+        });
+
+        if (!tyre) {
+            res.status(404).json({ message: 'Tyre not found' });
             return;
         }
 
+        const stockTyreId = tyre.stockTyreId;
         const existing = await prismaClient.stockTyre.findUnique({ where: { id: stockTyreId } });
         if (!existing) {
             res.status(404).json({ message: 'StockTyre not found' });

@@ -83,18 +83,15 @@ export const updateInspectionTyre = async (req: Request, res: Response) => {
                 return;
             }
             if (isReady) {
-                const isSpare = purpose.name.toLowerCase() === 'spare';
                 await tx.tyre.update({
                     where: { id: inspection.tyreId },
                     data: {
                         isReady: true,
                         isScrap: false,
-                        removedPurposeId: isSpare ? purpose.id : null // Jika spare, set removedPurposeId, jika tidak, null
+                        removedPurposeId: purpose.id,
                     }
                 });
             } else {
-                const isScrap = purpose.name.toLowerCase() === 'scrap';
-
                 await tx.tyre.update({
                     where: { id: inspection.tyreId },
                     data: {
