@@ -1,11 +1,12 @@
 import { Router } from "express";
 import { getAllInspectionTyre, updateInspectionTyre } from "../controllers/inspection.controller";
+import { protect } from "../middlewares/auth.middleware";
 
 const inspectionRouter = Router();
 
-inspectionRouter.get("/", getAllInspectionTyre);
+inspectionRouter.get("/", protect, getAllInspectionTyre);
 // inspectionRouter.post("/:type", createDropdownItem);
-inspectionRouter.put("/:id", updateInspectionTyre);
+inspectionRouter.put("/:id", protect, updateInspectionTyre);
 // inspectionRouter.delete("/:type/:id", deleteDropdownItem);
 
 

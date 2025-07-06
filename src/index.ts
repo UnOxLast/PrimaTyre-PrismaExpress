@@ -9,6 +9,11 @@ import inspectionRouter from './routes/inspection.router';
 import actionTyreRouter from './routes/actionTyre.router';
 import exportRouter from './routes/export.router';
 import cors from 'cors';
+import { login } from './controllers/auth.controller';
+import dotenv from "dotenv";
+
+dotenv.config();
+
 const app = express();
 const PORT = process.env.PORT || 8080;
 
@@ -19,7 +24,7 @@ const PORT = process.env.PORT || 8080;
 app.use(cors({
     origin: '*', // Ganti dengan domain frontend untuk production
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-    allowedHeaders: ['Origin', 'X-Requested-With', 'Content-Type', 'Accept', 'x-api-key', 'ngrok-skip-browser-warning']
+    allowedHeaders: ['Origin', 'Authorization', 'X-Requested-With', 'Content-Type', 'Accept', 'x-api-key', 'ngrok-skip-browser-warning']
 }))
 
 // app.use((req, res, next) => {
@@ -41,7 +46,7 @@ app.use(cors({
 // app.use(apiKeyMiddleware);
 
 app.use(express.json());
-
+app.post("/login", login);
 app.use('/tyre', tyreRouter);
 app.use('/unit', unitRouter);
 app.use('/user', userRouter);

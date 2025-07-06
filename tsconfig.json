@@ -16,27 +16,10 @@
     "resolveJsonModule": true
   },
   "include": [
-    "src/**/*.ts"
+    "src/**/*.ts",
+    "src/types/**/*.d.ts"
   ],
   "exclude": [
     "node_modules"
   ]
 }
-// {
-//   "compilerOptions": {
-//     "sourceMap": true,
-//     "outDir": "dist",
-//     "strict": true,
-//     "lib": [
-//       "esnext"
-//     ],
-//     "esModuleInterop": true,
-//     "moduleResolution": "node",
-//   },
-//   "include": [
-//     "src/**/*.ts"
-//   ],
-//   "exclude": [
-//     "node_modules"
-//   ]
-// }

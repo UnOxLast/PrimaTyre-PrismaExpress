@@ -7,14 +7,15 @@ import {
     updateUnit,
     deleteUnit
 } from "../controllers/unit.controller";
+import { protect } from "../middlewares/auth.middleware";
 
 const unitRouter = Router();
 
-unitRouter.get("/", getAllUnit)
-unitRouter.get("/:id", getUnitById);
-unitRouter.get("/sn/:sn", getUnitBySN)
-unitRouter.post("/", createUnit);
-unitRouter.put("/:id", updateUnit);
-unitRouter.delete("/:id", deleteUnit);
+unitRouter.get("/", protect, getAllUnit)
+unitRouter.get("/:id", protect, getUnitById);
+unitRouter.get("/sn/:sn", protect, getUnitBySN);
+unitRouter.post("/", protect, createUnit);
+unitRouter.put("/:id", protect, updateUnit);
+unitRouter.delete("/:id", protect, deleteUnit);
 
 export default module.exports = unitRouter

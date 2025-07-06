@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { Request, Response } from "express";
+import bcrypt from "bcryptjs";
 
 const userClient = new PrismaClient().user;
 
@@ -7,7 +8,12 @@ const userClient = new PrismaClient().user;
 export const getAllUser = async (req: Request, res: Response) => {
     try {
         const users = await userClient.findMany({
-            include: { roleUser: true },
+            select: {
+                id: true,
+                name: true,
+                // password: true,
+                roleUser: true
+            }
         });
         res.status(200).json({ data: users });
     } catch (error) {
@@ -24,7 +30,10 @@ export const getUserById = async (req: Request, res: Response) => {
             where: { id: UserId },
             include: { roleUser: true },
         });
-        // if (!user) return res.status(404).json({ message: "User not found" });
+        if (!user) {
+            res.status(404).json({ message: "User not found" });
+            return;
+        }
         res.status(200).json({ data: user });
     } catch (error) {
         console.error(error);
@@ -40,7 +49,10 @@ export const getUserByUsername = async (req: Request, res: Response) => {
             where: { name: username },
             include: { roleUser: true },
         });
-        // if (!user) return res.status(404).json({ message: "User not found" });
+        if (!user) {
+            res.status(404).json({ message: "User not found" });
+            return;
+        }
         res.status(200).json({ data: user });
     } catch (error) {
         console.error(error);
@@ -51,9 +63,14 @@ export const getUserByUsername = async (req: Request, res: Response) => {
 //CreateUser
 export const createUser = async (req: Request, res: Response) => {
     const { name, password, roleId } = req.body;
+    const hashedPassword = await bcrypt.hash(password, 10);
     try {
+        if (!name || !password || !roleId) {
+            res.status(400).json({ message: "Missing required fields" });
+            return
+        }
         const newUser = await userClient.create({
-            data: { name, password, roleId },
+            data: { name, password: hashedPassword, roleId },
             include: { roleUser: true },
         });
         res.status(201).json({ message: "User created", data: newUser });
@@ -67,10 +84,11 @@ export const createUser = async (req: Request, res: Response) => {
 export const updateUser = async (req: Request, res: Response) => {
     const UserId = Number(req.params.id);
     const { name, password, roleId } = req.body;
+    const hashedPassword = await bcrypt.hash(password, 10);
     try {
         const updatedUser = await userClient.update({
             where: { id: UserId },
-            data: { name, password, roleId },
+            data: { name, password: hashedPassword, roleId },
             include: { roleUser: true },
         });
         res.status(200).json({ message: "User updated", data: updatedUser });

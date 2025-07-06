@@ -1,15 +1,16 @@
 import { PrismaClient } from '@prisma/client'
 import { withAccelerate } from '@prisma/extension-accelerate'
+import bcrypt from "bcryptjs";
 
 const prisma = new PrismaClient().$extends(withAccelerate())
 
 async function main() {
     // ApiKey (anggap key unik)
-    await prisma.apiKey.upsert({
-        where: { key: "halodek" },
-        update: {},
-        create: { key: "halodek" },
-    })
+    // await prisma.apiKey.upsert({
+    //     where: { key: "halodek" },
+    //     update: {},
+    //     create: { key: "halodek" },
+    // })
 
     // RoleUser
     const roles = ['admin', 'TCMM', 'TISM', 'inspector']
@@ -182,22 +183,27 @@ async function main() {
         })
     }
 
-    // User
     const users = [
         { name: 'administrator', password: 'admin', roleId: 1 },
         { name: 'admintcm', password: 'tcm', roleId: 2 },
         { name: 'admintis', password: 'tis', roleId: 3 },
-    ]
+    ];
 
     for (const user of users) {
+        const hashedPassword = await bcrypt.hash(user.password, 10);
+
         await prisma.user.upsert({
-            where: { name: user.name },
+            where: { name: user.name }, // unique constraint harus ada di model
             update: {
-                password: user.password,
+                password: hashedPassword,
                 roleId: user.roleId,
             },
-            create: user,
-        })
+            create: {
+                name: user.name,
+                password: hashedPassword,
+                roleId: user.roleId,
+            },
+        });
     }
 
     // Jika ingin insert unit, pakai upsert juga atau createMany (tanpa skipDuplicates)
