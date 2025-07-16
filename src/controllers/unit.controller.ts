@@ -98,7 +98,8 @@ export const createUnit = async (req: Request, res: Response) => {
             siteId,
             location,
             unitTyreAmountId,
-            tyreIds: stockTyreIdsInput // Renamed for clarity: this array now contains stockTyreIds
+            tyreIds: stockTyreIdsInput, // Renamed for clarity: this array now contains stockTyreIds
+            dateTimeDone,
         } = req.body;
 
         // --- 1. Basic Input Validation ---
@@ -262,7 +263,7 @@ export const createUnit = async (req: Request, res: Response) => {
                         tread1Install: tyreData.tread1 ?? null, // Use pre-fetched tread values
                         tread2Install: tyreData.tread2 ?? null,
                         tyrePosition: i + 1, // Position on the unit
-                        dateTimeWork: new Date(), // Timestamp of the installation activity
+                        dateTimeDone: dateTimeDone ?? new Date(), // Timestamp of the installation activity
                     }
                 });
             }
@@ -308,51 +309,140 @@ export const createUnit = async (req: Request, res: Response) => {
     }
 };
 
-//updateUnit
+/**
+ * Memperbarui data Unit yang ada.
+ * - Validasi ID unit.
+ * - Memperbarui bidang unit yang disediakan.
+ * - Jika siteId unit berubah, sinkronkan siteId pada semua ban yang saat ini terpasang di unit tersebut.
+ * - Menggunakan transaksi untuk atomisitas.
+ * - dateTimeUpdate selalu disetel ke waktu server saat ini.
+ */
 export const updateUnit = async (req: Request, res: Response) => {
     try {
-        const unitId = Number(req.params.id)
-        const { nomorUnit, hmUnit, siteId, location, kmUnit, dateTimeUpdate } = req.body;
-
-        // Ambil unit lama untuk cek perubahan siteId
-        const oldUnit = await unitClient.findUnique({
-            where: { id: unitId },
-            select: { siteId: true }
-        });
-
-        const updatedUnit = await unitClient.update({
-            where: { id: unitId },
-            data: {
-                nomorUnit,
-                hmUnit,
-                kmUnit,
-                siteId,
-                location,
-                dateTimeUpdate: new Date() // Gunakan waktu sekarang jika dateTimeUpdate tidak diberikan
-            }
-        });
-
-        // Jika siteId berubah, update siteId pada semua Tyre yang terpasang di unit ini
-        if (oldUnit && siteId && oldUnit.siteId !== siteId) {
-            // Ambil semua Tyre yang sedang terpasang di unit ini
-            const positions = await prismaClient.unitTyrePosition.findMany({
-                where: { unitId },
-                select: { tyreId: true }
-            });
-            const tyreIds = positions.map(pos => pos.tyreId).filter((id): id is number => id !== null);
-
-            if (tyreIds.length > 0) {
-                await prismaClient.tyre.updateMany({
-                    where: { id: { in: tyreIds } },
-                    data: { siteId }
-                });
-            }
+        const unitId = Number(req.params.id);
+        // Validate unitId format immediately
+        if (isNaN(unitId)) {
+            res.status(400).json({ message: 'Invalid Unit ID format.' });
+            return;
         }
 
-        res.status(200).json({ message: "Unit updated", data: updatedUnit });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: "Failed to update unit" });
+        const {
+            nomorUnit,
+            hmUnit,
+            siteId,
+            location,
+            kmUnit,
+            // Removed dateTimeUpdate from destructuring req.body
+        } = req.body;
+
+        // --- Input Validation for Request Body Fields ---
+        // Check if field is provided AND its type is correct.
+        if (nomorUnit !== undefined && typeof nomorUnit !== 'string') {
+            res.status(400).json({ message: 'nomorUnit must be a string if provided.' });
+            return;
+        }
+        if (hmUnit !== undefined && typeof hmUnit !== 'number') {
+            res.status(400).json({ message: 'hmUnit must be a number if provided.' });
+            return;
+        }
+        // kmUnit can be null in the request body, but must be a number if not null
+        if (kmUnit !== undefined && typeof kmUnit !== 'number' && kmUnit !== null) {
+            res.status(400).json({ message: 'kmUnit must be a number or null if provided.' });
+            return;
+        }
+        if (siteId !== undefined && typeof siteId !== 'number') {
+            res.status(400).json({ message: 'siteId must be a number if provided.' });
+            return;
+        }
+        // location can be null in the request body, but must be a string if not null
+        if (location !== undefined && typeof location !== 'string' && location !== null) {
+            res.status(400).json({ message: 'location must be a string or null if provided.' });
+            return;
+        }
+        // Removed validation for dateTimeUpdate as it's no longer expected from body
+
+        // --- Start Transaction for Atomic Update ---
+        const result = await prismaClient.$transaction(async (tx) => {
+            // Fetch the existing unit within the transaction for consistent state.
+            const existingUnit = await tx.unit.findUnique({
+                where: { id: unitId },
+                select: { id: true, siteId: true } // Only select what's needed for the update logic
+            });
+
+            // If the unit doesn't exist, throw an error to be caught by the outer catch block.
+            if (!existingUnit) {
+                throw new Error('Unit not found'); // Custom error message to distinguish from other 500s
+            }
+
+            // Prepare update data: only include fields that are explicitly provided in the request body.
+            const updateData: {
+                nomorUnit?: string;
+                hmUnit?: number;
+                kmUnit?: number;
+                siteId?: number;
+                location?: string | null;
+                dateTimeUpdate: Date; // This field will always be updated to current server time
+            } = {
+                dateTimeUpdate: new Date(), // Always set to the current server timestamp
+            };
+
+            if (nomorUnit !== undefined) updateData.nomorUnit = nomorUnit;
+            if (hmUnit !== undefined) updateData.hmUnit = hmUnit;
+            if (kmUnit !== undefined) updateData.kmUnit = kmUnit ?? 0; // Convert null to 0 for Int field as per schema
+            if (siteId !== undefined) updateData.siteId = siteId;
+            if (location !== undefined) updateData.location = location ?? null; // Explicitly set to null if provided as null
+
+            // 1. Update the Unit record
+            const updatedUnit = await tx.unit.update({
+                where: { id: unitId },
+                data: updateData,
+            });
+
+            // 2. If siteId has changed, update the siteId for all Tyres currently installed on this unit.
+            if (siteId !== undefined && existingUnit.siteId !== siteId) {
+                const positions = await tx.unitTyrePosition.findMany({
+                    where: { unitId: updatedUnit.id },
+                    select: { tyreId: true }
+                });
+                const tyreIdsToUpdate = positions
+                    .map(pos => pos.tyreId)
+                    .filter((id): id is number => id !== null);
+
+                if (tyreIdsToUpdate.length > 0) {
+                    await tx.tyre.updateMany({
+                        where: { id: { in: tyreIdsToUpdate } },
+                        data: { siteId }
+                    });
+                }
+            }
+
+            return updatedUnit; // Return the successfully updated unit data from the transaction
+        }); // End of prismaClient.$transaction
+
+        // Send a success response with the updated unit data
+        res.status(200).json({ message: "Unit updated successfully", data: result });
+        return; // Explicitly return after sending response
+
+    } catch (error: any) {
+        console.error('Error updating unit:', error); // Log the full error for debugging
+
+        // --- Specific Error Handling ---
+        if (error.code === 'P2002') {
+            const target = error.meta?.target?.[0];
+            if (target === 'nomorUnit') {
+                res.status(409).json({ error: 'Unit number already exists. Please choose a different one.' });
+                return;
+            }
+            res.status(409).json({ error: `Duplicate entry found for ${target || 'unknown field'}.` });
+            return;
+        }
+        if (error.code === 'P2025' || error.message === 'Unit not found') {
+            res.status(404).json({ message: 'Unit not found.' });
+            return;
+        }
+        // Fallback for any other unexpected errors
+        res.status(500).json({ message: 'Internal Server Error', error: error.message });
+        return;
     }
 };
 
