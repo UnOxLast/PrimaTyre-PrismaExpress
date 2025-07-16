@@ -180,7 +180,7 @@ export const createTyre = async (req: Request, res: Response) => {
  */
 export const updateStockTyre = async (req: Request, res: Response) => {
     try {
-        const { id } = req.params;
+        const { id } = req.params; // This 'id' is for Tyre, not StockTyre
         const {
             serialNumber,
             merkId,
@@ -190,9 +190,9 @@ export const updateStockTyre = async (req: Request, res: Response) => {
             otd2,
             price,
             tyreSizeId,
-            oHM,
-            oKM,
-            siteId,
+            oHM, // Original HM from StockTyre when it was first recorded
+            oKM, // Original KM from StockTyre when it was first recorded
+            siteId, // Site where the specific Tyre is located
             dateTimeUpdate
         } = req.body;
 
@@ -202,25 +202,33 @@ export const updateStockTyre = async (req: Request, res: Response) => {
             return
         }
 
-        const tyre = await prismaClient.tyre.findUnique({
+        // Fetch the Tyre and its associated StockTyre directly in one query
+        const tyreWithStock = await prismaClient.tyre.findUnique({
             where: { id: tyreId },
-            select: { stockTyreId: true }
+            include: {
+                stockTyre: true, // Includes the related StockTyre data
+                site: true, // Including the current site might be useful for the Tyre update
+                installedUnit: true // Include the unit if it's currently installed, for HM/KM calculation
+            }
         });
 
-        if (!tyre) {
+        if (!tyreWithStock) {
             res.status(404).json({ message: 'Tyre not found' });
+            return
+        }
+
+        const existingStockTyre = tyreWithStock.stockTyre;
+
+        if (!existingStockTyre) {
+            // This means the Tyre exists, but its stockTyreId points to a non-existent StockTyre.
+            // This indicates a data integrity problem that should be addressed.
+            res.status(404).json({ message: 'Associated StockTyre not found for this Tyre. Data inconsistency detected.' });
             return;
         }
 
-        const stockTyreId = tyre.stockTyreId;
-        const existing = await prismaClient.stockTyre.findUnique({ where: { id: stockTyreId } });
-        if (!existing) {
-            res.status(404).json({ message: 'StockTyre not found' });
-            return;
-        }
-
-        // Cek serialNumber unik jika diubah
-        if (serialNumber && serialNumber !== existing.serialNumber) {
+        // Check serialNumber uniqueness if changed
+        // This check is against ALL StockTyres, which is correct for uniqueness.
+        if (serialNumber && serialNumber !== existingStockTyre.serialNumber) {
             const duplicate = await prismaClient.stockTyre.findUnique({ where: { serialNumber } });
             if (duplicate) {
                 res.status(409).json({ error: 'serialNumber already exists' });
@@ -228,76 +236,106 @@ export const updateStockTyre = async (req: Request, res: Response) => {
             }
         }
 
-        // Update StockTyre
-        const updatedStockTyre = await prismaClient.stockTyre.update({
-            where: { id: stockTyreId },
-            data: {
-                serialNumber,
-                merkId,
-                type,
-                pattern,
-                otd1,
-                otd2,
-                price,
-                tyreSizeId,
-                oHM,
-                oKM,
-                dateTimeUpdate: new Date(dateTimeUpdate) ?? new Date(),
-            },
-        });
-
-        // Sinkronisasi HM/KM Tyre terkait
-        const tyres = await prismaClient.tyre.findMany({
-            where: { stockTyreId },
-            select: { id: true }
-        });
-
-        for (const tyre of tyres) {
-            const tyreId = tyre.id;
-
-            // Ambil semua aktivitas pemasangan dan pelepasan untuk Tyre ini
-            const installedActivities = await prismaClient.activityTyre.findMany({
-                where: { installedTyreId: tyreId },
-                orderBy: { dateTimeWork: 'asc' }
-            });
-
-            const removedActivities = await prismaClient.activityTyre.findMany({
-                where: { removedTyreId: tyreId },
-                orderBy: { dateTimeWork: 'asc' }
-            });
-
-            let totalHM = 0;
-            let totalKM = 0;
-            const len = Math.min(installedActivities.length, removedActivities.length);
-
-            for (let i = 0; i < len; i++) {
-                const iHM = installedActivities[i].hmAtActivity || 0;
-                const rHM = removedActivities[i].hmAtActivity || 0;
-                totalHM += Math.max(rHM - iHM, 0);
-
-                const iKM = installedActivities[i].kmAtActivity || 0;
-                const rKM = removedActivities[i].kmAtActivity || 0;
-                totalKM += Math.max(rKM - iKM, 0);
-            }
-
-            // Tambahkan nilai awal dari stockTyre
-            const finalHM = totalHM + (oHM || 0);
-            const finalKM = totalKM + (oKM || 0);
-
-            // Update hmTyre dan kmTyre
-            await prismaClient.tyre.update({
-                where: { id: tyreId },
+        // --- Start Transaction for Atomic Update ---
+        const result = await prismaClient.$transaction(async (tx) => {
+            // 1. Update StockTyre
+            const updatedStockTyre = await tx.stockTyre.update({
+                where: { id: existingStockTyre.id },
                 data: {
-                    hmTyre: finalHM,
-                    kmTyre: finalKM,
-                    siteId: siteId, // Gunakan siteId dari StockTyre jika tidak diubah
+                    serialNumber: serialNumber ?? existingStockTyre.serialNumber,
+                    merkId: merkId ?? existingStockTyre.merkId,
+                    type: type ?? existingStockTyre.type,
+                    pattern: pattern ?? existingStockTyre.pattern,
+                    otd1: otd1 ?? existingStockTyre.otd1,
+                    otd2: otd2 ?? existingStockTyre.otd2,
+                    price: price ?? existingStockTyre.price,
+                    tyreSizeId: tyreSizeId ?? existingStockTyre.tyreSizeId,
+                    oHM: oHM ?? existingStockTyre.oHM,
+                    oKM: oKM ?? existingStockTyre.oKM,
+                    dateTimeUpdate: dateTimeUpdate ? new Date(dateTimeUpdate) : new Date(),
+                },
+            });
+
+            // 2. Recalculate and Synchronize HM/KM for the specific Tyre linked to this StockTyre
+            // Since `Tyre.stockTyreId` is `@unique`, there's only one Tyre per StockTyre.
+            // We are already operating on that specific `tyreWithStock` object.
+
+            // Fetch activities for *this specific Tyre (tyreId)*
+            const activities = await tx.activityTyre.findMany({
+                where: {
+                    OR: [
+                        { installedTyreId: tyreId },
+                        { removedTyreId: tyreId }
+                    ]
+                },
+                orderBy: { dateTimeWork: 'asc' },
+                include: {
+                    unit: { select: { hmUnit: true, kmUnit: true } } // Fetch current unit HM/KM, matching schema's `hmUnit`/`kmUnit`
                 }
             });
-        }
+
+            let accumulatedHM = updatedStockTyre.oHM ?? 0;
+            let accumulatedKM = updatedStockTyre.oKM ?? 0;
+
+            let lastInstallHM: number | null = null;
+            let lastInstallKM: number | null = null;
+
+            for (const activity of activities) {
+                if (activity.installedTyreId === tyreId) {
+                    // Tyre was installed
+                    lastInstallHM = activity.hmAtActivity ?? 0;
+                    lastInstallKM = activity.kmAtActivity ?? 0;
+                } else if (activity.removedTyreId === tyreId && lastInstallHM !== null && lastInstallKM !== null) {
+                    // Tyre was removed after being installed and we have valid install readings
+                    const removalHM = activity.hmAtActivity ?? 0;
+                    const removalKM = activity.kmAtActivity ?? 0;
+                    accumulatedHM += Math.max(removalHM - lastInstallHM, 0);
+                    accumulatedKM += Math.max(removalKM - lastInstallKM, 0);
+                    lastInstallHM = null; // Reset for next installation cycle
+                    lastInstallKM = null;
+                }
+            }
+
+            // If the tyre is currently installed (lastInstallHM and lastInstallKM are not null)
+            // and it's linked to an `installedUnitId` in the `Tyre` model,
+            // fetch that unit's current HM/KM.
+            if (lastInstallHM !== null && lastInstallKM !== null && tyreWithStock.installedUnitId) {
+                const currentUnit = await tx.unit.findUnique({
+                    where: { id: tyreWithStock.installedUnitId },
+                    select: { hmUnit: true, kmUnit: true }
+                });
+
+                if (currentUnit) {
+                    accumulatedHM += Math.max((currentUnit.hmUnit ?? 0) - lastInstallHM, 0);
+                    accumulatedKM += Math.max((currentUnit.kmUnit ?? 0) - lastInstallKM, 0);
+                }
+            }
+
+
+            // Update the specific Tyre (tyreWithStock.id)
+            await tx.tyre.update({
+                where: { id: tyreId }, // Use tyreId directly
+                data: {
+                    hmTyre: accumulatedHM,
+                    kmTyre: accumulatedKM,
+                    // Update siteId for Tyre if provided, otherwise keep existing
+                    siteId: siteId ?? tyreWithStock.siteId,
+                    // Also update tread if otd1/otd2 changed for stockTyre
+                    // Note: If otd1/otd2 in StockTyre represent initial tread depths,
+                    // and tread1/tread2 in Tyre represent *current* tread depths,
+                    // then this update might not be desired unless they are always synced.
+                    // If they are initial, then this should likely be removed or adjusted.
+                    tread1: otd1 ?? tyreWithStock.tread1,
+                    tread2: otd2 ?? tyreWithStock.tread2,
+                }
+            });
+
+            return updatedStockTyre;
+        }); // End of transaction
 
         res.status(200).json({
-            message: "StockTyre and related Tyre(s) updated successfully",
-            data: updatedStockTyre
+            message: "StockTyre and related Tyre updated successfully",
+            data: result
         });
     } catch (error: any) {
         console.error('Error updating StockTyre:', error);
