@@ -81,6 +81,7 @@ export const getUnitBySN = async (req: Request, res: Response) => {
     }
 };
 
+
 /**
  * Membuat Unit baru dan mengaitkan ban-ban yang ditentukan (menggunakan stockTyreId dari input).
  * - Validasi input dasar.
@@ -99,7 +100,7 @@ export const createUnit = async (req: Request, res: Response) => {
             location,
             unitTyreAmountId,
             tyreIds: stockTyreIdsInput, // Renamed for clarity: this array now contains stockTyreIds
-            dateTimeDone,
+            dateTimeDone, // dateTimeDone from request body (string)
         } = req.body;
 
         // --- 1. Basic Input Validation ---
@@ -193,9 +194,25 @@ export const createUnit = async (req: Request, res: Response) => {
                 message: 'One or more tyres cannot be installed due to availability issues.',
                 details: unavailableTyreDetails
             });
-            return
+            return;
         }
 
+        // --- Parse dateTimeDone from string to Date object ---
+        let parsedDateTimeDone: Date | undefined;
+        if (dateTimeDone) {
+            try {
+                parsedDateTimeDone = new Date(dateTimeDone);
+                // Check if the parsed date is valid (e.g., not "Invalid Date")
+                if (isNaN(parsedDateTimeDone.getTime())) {
+                    res.status(400).json({ message: 'Invalid dateTimeDone format. Please provide a valid date string (e.g., YYYY-MM-DDTHH:mm:ssZ).' });
+                    return;
+                }
+            } catch (e) {
+                // Catch any errors during date parsing
+                res.status(400).json({ message: 'Error parsing dateTimeDone. Please provide a valid date string.' });
+                return;
+            }
+        }
 
         // --- 4. Transaction for Atomic Operations ---
         const newUnitWithTyres = await prismaClient.$transaction(async (tx) => {
@@ -221,6 +238,9 @@ export const createUnit = async (req: Request, res: Response) => {
                 data: unitData
             });
 
+            // dateTimeWork should represent the actual moment of installation for the activity
+            const activityDateTimeWork = new Date(); // Current server time for the work activity
+
             // 4.2. Create UnitTyrePosition & ActivityTyre for each tyre, and update Tyre status
             for (let i = 0; i < finalTyreIds.length; i++) {
                 const tyreId = finalTyreIds[i]; // Use the actual Tyre.id
@@ -228,7 +248,6 @@ export const createUnit = async (req: Request, res: Response) => {
                 const tyreData = tyresToInstall.find(t => t.id === tyreId);
 
                 if (!tyreData) {
-                    // This should ideally not happen due to the pre-validation, but as a safeguard
                     throw new Error(`Tyre with ID ${tyreId} became unavailable during transaction (pre-validation missed).`);
                 }
 
@@ -263,7 +282,9 @@ export const createUnit = async (req: Request, res: Response) => {
                         tread1Install: tyreData.tread1 ?? null, // Use pre-fetched tread values
                         tread2Install: tyreData.tread2 ?? null,
                         tyrePosition: i + 1, // Position on the unit
-                        dateTimeDone: dateTimeDone ?? new Date(), // Timestamp of the installation activity
+                        dateTimeWork: activityDateTimeWork, // Use the server-generated work time
+                        // Conditionally add dateTimeDone only if it was provided and successfully parsed
+                        ...(parsedDateTimeDone && { dateTimeDone: parsedDateTimeDone }),
                     }
                 });
             }
@@ -282,6 +303,7 @@ export const createUnit = async (req: Request, res: Response) => {
         });
 
         res.status(201).json({ message: 'Unit created successfully', unit: newUnitWithTyres });
+        return;
 
     } catch (error: any) {
         console.error('Error creating unit:', error);
@@ -291,21 +313,22 @@ export const createUnit = async (req: Request, res: Response) => {
             const target = error.meta?.target?.[0];
             if (target === 'nomorUnit') {
                 res.status(409).json({ error: 'nomorUnit already exists' });
-                return
+                return;
             }
             // This case handles `@@unique([unitId, position])` on UnitTyrePosition
             // if a position on this new unit was somehow duplicated in the input.
             // Or if a tyreId somehow got installed twice in the same request (though pre-check helps).
             if (target === 'unitId' && error.meta?.target?.[1] === 'position') {
                 res.status(409).json({ error: 'A tyre position on this unit is already assigned.' });
-                return
+                return;
             }
             // Fallback for other P2002 errors
             res.status(409).json({ error: `Duplicate entry for ${target || 'unknown field'}` });
-            return
+            return;
         }
 
         res.status(500).json({ error: 'Internal Server Error', message: error.message });
+        return;
     }
 };
 
