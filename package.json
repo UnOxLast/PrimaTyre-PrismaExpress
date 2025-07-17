@@ -9,7 +9,8 @@
     "devIndex": "tsx index.ts",
     "devSeed": "tsx seed.ts",
     "dev": "nodemon src/index.ts",
-    "start": "ts-node src/index.ts"
+    "build": "tsc",
+    "start": "node dist/index.js"
   },
   "dependencies": {
     "@prisma/client": "6.7.0",
