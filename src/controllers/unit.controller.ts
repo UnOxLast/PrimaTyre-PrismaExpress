@@ -83,11 +83,10 @@ export const getUnitBySN = async (req: Request, res: Response) => {
 
 
 /**
- * Membuat Unit baru dan mengaitkan ban-ban yang ditentukan (menggunakan stockTyreId dari input).
+ * Membuat Unit baru dan mengaitkan ban-ban yang ditentukan (menggunakan Tyre.id langsung).
  * - Validasi input dasar.
  * - Validasi jumlah ban sesuai dengan unitTyreAmount.
- * - Mengkonversi stockTyreId menjadi Tyre.id dan memvalidasi setiap ban yang akan dipasang:
- * harus ada, tidak terhapus, tidak sedang terpasang, dan siap dipasang.
+ * - Memvalidasi setiap ban yang akan dipasang: harus ada, tidak terhapus, dan tidak sedang terpasang di unit lain.
  * - Menggunakan transaction untuk memastikan atomicity.
  */
 export const createUnit = async (req: Request, res: Response) => {
@@ -99,8 +98,8 @@ export const createUnit = async (req: Request, res: Response) => {
             siteId,
             location,
             unitTyreAmountId,
-            tyreIds: stockTyreIdsInput, // Renamed for clarity: this array now contains stockTyreIds
-            dateTimeDone, // dateTimeDone from request body (string)
+            tyreIds, // Ini sekarang adalah array Tyre.id langsung
+            dateTimeDone, // dateTimeDone dari request body (string)
         } = req.body;
 
         // --- 1. Basic Input Validation ---
@@ -109,7 +108,7 @@ export const createUnit = async (req: Request, res: Response) => {
             return;
         }
 
-        if (!Array.isArray(stockTyreIdsInput)) {
+        if (!Array.isArray(tyreIds)) {
             res.status(400).json({ message: 'tyreIds must be an array' });
             return;
         }
@@ -124,23 +123,23 @@ export const createUnit = async (req: Request, res: Response) => {
             return;
         }
 
-        if (stockTyreIdsInput.length !== tyreAmountObj.amount) {
+        if (tyreIds.length !== tyreAmountObj.amount) {
             res.status(400).json({ message: `Exactly ${tyreAmountObj.amount} tyre(s) must be provided for this unit type.` });
             return;
         }
 
-        // --- 3. Convert stockTyreIds to Tyre.ids and Pre-validate each Tyre (CRITICAL) ---
-        // Find the Tyre record for each provided stockTyreId, and include its status
+        // --- 3. Pre-validate each Tyre (CRITICAL) ---
+        // Find the Tyre record for each provided Tyre.id, and include its status
         const tyresToInstall = await prismaClient.tyre.findMany({
             where: {
-                stockTyreId: { in: stockTyreIdsInput }, // Use stockTyreId to find the Tyre
+                id: { in: tyreIds }, // Langsung gunakan Tyre.id
                 isDeleted: false,    // Must not be soft-deleted
                 isInstalled: false,  // Must not be currently installed on another unit
                 isReady: true,       // Must be ready for installation
             },
             select: {
                 id: true, // This is the actual Tyre.id we need
-                stockTyreId: true, // Keep this to map back
+                stockTyreId: true, // Keep this for potential future needs
                 tread1: true,
                 tread2: true,
                 isInstalled: true,
@@ -151,45 +150,43 @@ export const createUnit = async (req: Request, res: Response) => {
             }
         });
 
-        // Map original input stockTyreIds to found Tyre.ids for consistent processing
+        // Map original input Tyre.ids to found Tyre.ids for consistent processing
         const finalTyreIds: number[] = [];
         const unavailableTyreDetails: string[] = [];
-        const uniqueStockTyreIds = new Set(stockTyreIdsInput);
+        const uniqueTyreIdsInput = new Set(tyreIds); // Check for duplicates in input array itself
 
-        if (uniqueStockTyreIds.size !== stockTyreIdsInput.length) {
-            unavailableTyreDetails.push('Duplicate stockTyre IDs provided in the input list.');
+        if (uniqueTyreIdsInput.size !== tyreIds.length) {
+            unavailableTyreDetails.push('Duplicate Tyre IDs provided in the input list.');
         }
 
-        for (const stockTyreId of stockTyreIdsInput) {
-            const foundTyre = tyresToInstall.find(t => t.stockTyreId === stockTyreId);
+        for (const tyreId of tyreIds) {
+            const foundTyre = tyresToInstall.find(t => t.id === tyreId);
 
             if (!foundTyre) {
                 // If not found, it's unavailable or doesn't exist
-                const existingStockTyre = await prismaClient.stockTyre.findUnique({ // Check stockTyre status
-                    where: { id: stockTyreId },
-                    include: { tyre: { select: { id: true, isDeleted: true, isInstalled: true, isReady: true } } }
+                const existingTyreCheck = await prismaClient.tyre.findUnique({ // Check actual Tyre status for specific error message
+                    where: { id: tyreId },
+                    select: { id: true, isDeleted: true, isInstalled: true, isReady: true }
                 });
 
-                if (!existingStockTyre) {
-                    unavailableTyreDetails.push(`StockTyre ID ${stockTyreId} not found.`);
-                } else if (!existingStockTyre.tyre) {
-                    unavailableTyreDetails.push(`StockTyre ID ${stockTyreId} has no associated Tyre instance.`);
-                } else if (existingStockTyre.tyre.isDeleted) {
-                    unavailableTyreDetails.push(`Tyre associated with StockTyre ID ${stockTyreId} is deleted.`);
-                } else if (existingStockTyre.tyre.isInstalled) {
-                    unavailableTyreDetails.push(`Tyre associated with StockTyre ID ${stockTyreId} is already installed.`);
-                } else if (!existingStockTyre.tyre.isReady) {
-                    unavailableTyreDetails.push(`Tyre associated with StockTyre ID ${stockTyreId} is not ready for installation.`);
+                if (!existingTyreCheck) {
+                    unavailableTyreDetails.push(`Tyre ID ${tyreId} not found.`);
+                } else if (existingTyreCheck.isDeleted) {
+                    unavailableTyreDetails.push(`Tyre ID ${tyreId} is deleted.`);
+                } else if (existingTyreCheck.isInstalled) {
+                    unavailableTyreDetails.push(`Tyre ID ${tyreId} is already installed.`);
+                } else if (!existingTyreCheck.isReady) {
+                    unavailableTyreDetails.push(`Tyre ID ${tyreId} is not ready for installation.`);
                 } else {
-                    // Fallback for unexpected cases
-                    unavailableTyreDetails.push(`Tyre associated with StockTyre ID ${stockTyreId} is unavailable for an unknown reason.`);
+                    // Fallback for unexpected cases (should be caught by prismaClient.tyre.findMany above)
+                    unavailableTyreDetails.push(`Tyre ID ${tyreId} is unavailable for an unknown reason.`);
                 }
             } else {
                 finalTyreIds.push(foundTyre.id); // Add the actual Tyre.id to the list for installation
             }
         }
 
-        if (finalTyreIds.length !== stockTyreIdsInput.length || unavailableTyreDetails.length > 0) {
+        if (finalTyreIds.length !== tyreIds.length || unavailableTyreDetails.length > 0) {
             res.status(400).json({
                 message: 'One or more tyres cannot be installed due to availability issues.',
                 details: unavailableTyreDetails

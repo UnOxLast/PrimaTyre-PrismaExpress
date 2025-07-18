@@ -108,12 +108,12 @@ export const createActivityTyre = async (req: Request, res: Response) => {
             hmAtActivity,
             kmAtActivity,
             location,
-            removedTyreId: removedStockTyreIdInput, // Input ini adalah StockTyreId
+            removedTyreId, // Ini sekarang adalah Tyre.id
             tread1Remove,
             tread2Remove,
             removeReasonId,
             removePurposeId,
-            installedTyreId: installedStockTyreIdInput, // Input ini adalah StockTyreId
+            installedTyreId, // Ini sekarang adalah Tyre.id
             tread1Install,
             tread2Install,
             airConditionId,
@@ -121,7 +121,7 @@ export const createActivityTyre = async (req: Request, res: Response) => {
             manpower,
             dateTimeWork,
             dateTimeDone,
-            tyrePosition // Posisi ban dari input (sekarang opsional)
+            tyrePosition // Posisi ban dari input (opsional, akan otomatis dicari jika tidak ada)
         } = req.body;
 
         // --- 1. Validasi Input Awal ---
@@ -142,18 +142,18 @@ export const createActivityTyre = async (req: Request, res: Response) => {
             return;
         }
 
-        // Pastikan setidaknya ada removedTyreId atau installedTyreId (sebagai StockTyreId)
-        if (!removedStockTyreIdInput && !installedStockTyreIdInput) {
-            res.status(400).json({ message: 'Either removedTyreId or installedTyreId must be provided (as StockTyreId).' });
+        // Pastikan setidaknya ada removedTyreId atau installedTyreId
+        if (!removedTyreId && !installedTyreId) {
+            res.status(400).json({ message: 'Either removedTyreId or installedTyreId must be provided.' });
             return;
         }
 
-        // Validasi tipe data StockTyreId
-        if (removedStockTyreIdInput !== undefined && typeof removedStockTyreIdInput !== 'number' && removedStockTyreIdInput !== null) {
+        // Validasi ID ban (sebagai Tyre.id)
+        if (removedTyreId !== undefined && typeof removedTyreId !== 'number' && removedTyreId !== null) {
             res.status(400).json({ message: 'removedTyreId must be a number or null.' });
             return;
         }
-        if (installedStockTyreIdInput !== undefined && typeof installedStockTyreIdInput !== 'number' && installedStockTyreIdInput !== null) {
+        if (installedTyreId !== undefined && typeof installedTyreId !== 'number' && installedTyreId !== null) {
             res.status(400).json({ message: 'installedTyreId must be a number or null.' });
             return;
         }
@@ -191,56 +191,54 @@ export const createActivityTyre = async (req: Request, res: Response) => {
             }
         }
 
-        // --- Validasi Relasi ID (penting untuk P2003 dan konversi StockTyreId ke TyreId) ---
+        // --- Validasi Relasi ID (penting untuk P2003) ---
+        // Fetch details of removed and installed tyres (now directly by Tyre.id)
         let removedTyreDetails: any = null;
-        let finalRemovedTyreId: number | null = null;
-        if (removedStockTyreIdInput) {
+        if (removedTyreId) {
             removedTyreDetails = await prismaClient.tyre.findUnique({
-                where: { stockTyreId: removedStockTyreIdInput }, // Cari berdasarkan stockTyreId
+                where: { id: removedTyreId }, // Langsung cari berdasarkan Tyre.id
                 select: { id: true, tread1: true, tread2: true, isInstalled: true, isDeleted: true, hmTyre: true, kmTyre: true, installedUnitId: true, positionTyre: true, stockTyre: { select: { oHM: true, oKM: true } } }
             });
             if (!removedTyreDetails) {
-                res.status(404).json({ message: `Removed Tyre (StockTyre ID ${removedStockTyreIdInput}) not found or has no associated Tyre instance.` });
+                res.status(404).json({ message: `Removed Tyre ID ${removedTyreId} not found.` });
                 return;
             }
             if (removedTyreDetails.isDeleted) {
-                res.status(400).json({ message: `Removed Tyre (StockTyre ID ${removedStockTyreIdInput}) is deleted.` });
+                res.status(400).json({ message: `Removed Tyre ID ${removedTyreId} is deleted.` });
                 return;
             }
+            // Tambahkan validasi jika removedTyreId tidak terpasang di unit ini
             if (!removedTyreDetails.isInstalled || removedTyreDetails.installedUnitId !== unitId) {
-                res.status(400).json({ message: `Removed Tyre (StockTyre ID ${removedStockTyreIdInput}) is not currently installed on this unit.` });
+                res.status(400).json({ message: `Removed Tyre ID ${removedTyreId} is not currently installed on this unit.` });
                 return;
             }
-            finalRemovedTyreId = removedTyreDetails.id; // Simpan Tyre.id yang sebenarnya
         }
 
         let installedTyreDetails: any = null;
-        let finalInstalledTyreId: number | null = null;
-        if (installedStockTyreIdInput) {
+        if (installedTyreId) {
             installedTyreDetails = await prismaClient.tyre.findUnique({
-                where: { stockTyreId: installedStockTyreIdInput }, // Cari berdasarkan stockTyreId
+                where: { id: installedTyreId }, // Langsung cari berdasarkan Tyre.id
                 select: { id: true, tread1: true, tread2: true, isInstalled: true, isDeleted: true, isReady: true }
             });
             if (!installedTyreDetails) {
-                res.status(404).json({ message: `Installed Tyre (StockTyre ID ${installedStockTyreIdInput}) not found or has no associated Tyre instance.` });
+                res.status(404).json({ message: `Installed Tyre ID ${installedTyreId} not found.` });
                 return;
             }
             if (installedTyreDetails.isDeleted) {
-                res.status(400).json({ message: `Installed Tyre (StockTyre ID ${installedStockTyreIdInput}) is deleted.` });
+                res.status(400).json({ message: `Installed Tyre ID ${installedTyreId} is deleted.` });
                 return;
             }
             if (installedTyreDetails.isInstalled) {
-                res.status(400).json({ message: `Installed Tyre (StockTyre ID ${installedStockTyreIdInput}) is already installed on another unit.` });
+                res.status(400).json({ message: `Installed Tyre ID ${installedTyreId} is already installed on another unit.` });
                 return;
             }
             if (!installedTyreDetails.isReady) {
-                res.status(400).json({ message: `Installed Tyre (StockTyre ID ${installedStockTyreIdInput}) is not ready for installation.` });
+                res.status(400).json({ message: `Installed Tyre ID ${installedTyreId} is not ready for installation.` });
                 return;
             }
-            finalInstalledTyreId = installedTyreDetails.id; // Simpan Tyre.id yang sebenarnya
         }
 
-        // Validasi relasi ID lainnya jika diberikan (tetap sama)
+        // Validasi relasi ID lainnya jika diberikan
         if (removeReasonId !== undefined && removeReasonId !== null) {
             const reason = await prismaClient.removeReason.findUnique({ where: { id: removeReasonId } });
             if (!reason) {
@@ -252,7 +250,7 @@ export const createActivityTyre = async (req: Request, res: Response) => {
             res.status(400).json({ message: 'removePurposeId must be a number or null.' });
             return;
         }
-        if (removePurposeId !== undefined && removePurposeId !== null) {
+        if (removePurposeId !== undefined && removePurposeId !== null) { // If it's a number, check existence
             const purpose = await prismaClient.removePurpose.findUnique({ where: { id: removePurposeId } });
             if (!purpose) {
                 res.status(404).json({ message: `RemovePurpose ID ${removePurposeId} not found.` });
@@ -266,6 +264,7 @@ export const createActivityTyre = async (req: Request, res: Response) => {
                 return;
             }
         }
+
 
         // --- Transaksi Atomic ---
         const newActivity = await prismaClient.$transaction(async (tx) => {
@@ -287,25 +286,25 @@ export const createActivityTyre = async (req: Request, res: Response) => {
                     throw new Error(`Tyre position ${finalTyrePosition} is out of valid range (1 to ${unit.UnitTyreAmount.amount}) for Unit ID ${unitId}.`);
                 }
                 // Jika hanya memasang (tidak melepas), pastikan posisi yang diberikan kosong
-                if (!finalRemovedTyreId && finalInstalledTyreId) {
+                if (!removedTyreId && installedTyreId) {
                     const positionOccupied = unit.tyres.some(pos => pos.position === finalTyrePosition && pos.tyreId !== null);
                     if (positionOccupied) {
                         throw new Error(`Position ${finalTyrePosition} on Unit ID ${unitId} is already occupied by another tyre.`);
                     }
                 }
-                // Jika melepas, pastikan ban yang dilepas ada di posisi itu
-                if (finalRemovedTyreId && removedTyreDetails.positionTyre !== finalTyrePosition) {
-                    throw new Error(`Removed Tyre (ID ${finalRemovedTyreId}) is not installed at position ${finalTyrePosition} on this unit.`);
-                }
+                // Jika melepas, pastikan ban yang dilepas ada di posisi itu (sudah di cek di luar transaksi)
+                // if (removedTyreId && removedTyreDetails.positionTyre !== finalTyrePosition) {
+                //    throw new Error(`Removed Tyre ID ${removedTyreId} is not installed at position ${finalTyrePosition}.`);
+                // }
             } else {
                 // Jika tyrePosition TIDAK diberikan di input, tentukan secara otomatis
-                if (finalRemovedTyreId) {
+                if (removedTyreId) {
                     // Prioritas 1: Ambil dari ban yang dilepas (jika ada)
                     finalTyrePosition = removedTyreDetails?.positionTyre ?? undefined;
                     if (!finalTyrePosition) {
-                        throw new Error(`Removed Tyre (ID ${finalRemovedTyreId}) has no assigned position on this unit to infer tyrePosition automatically.`);
+                        throw new Error(`Removed Tyre ID ${removedTyreId} has no assigned position on this unit to infer tyrePosition automatically.`);
                     }
-                } else if (finalInstalledTyreId) {
+                } else if (installedTyreId) {
                     // Prioritas 2: Cari posisi kosong (jika hanya memasang)
                     const existingPositions = new Set(unit.tyres.map(p => p.position).filter(p => p !== null));
                     let foundEmptyPosition: number | undefined;
@@ -338,14 +337,14 @@ export const createActivityTyre = async (req: Request, res: Response) => {
 
 
             // 3. Update posisi ban pada UnitTyrePosition (penting untuk proses pasang/lepas)
-            if (finalRemovedTyreId) { // Jika ada ban yang dilepas, kosongkan posisi lama
+            if (removedTyreId) { // Jika ada ban yang dilepas, kosongkan posisi lama
                 await tx.unitTyrePosition.updateMany({
-                    where: { unitId, position: finalTyrePosition, tyreId: finalRemovedTyreId }, // Gunakan finalRemovedTyreId
+                    where: { unitId, position: finalTyrePosition, tyreId: removedTyreId }, // Pastikan hanya mengosongkan jika ban tsb ada di posisi itu
                     data: { tyreId: { set: null } }
                 });
             }
 
-            if (finalInstalledTyreId) { // Jika ada ban yang dipasang, pasang di posisi yang ditentukan
+            if (installedTyreId) { // Jika ada ban yang dipasang, pasang di posisi yang ditentukan
                 await tx.unitTyrePosition.upsert({
                     where: {
                         unitId_position: {
@@ -353,24 +352,24 @@ export const createActivityTyre = async (req: Request, res: Response) => {
                             position: finalTyrePosition
                         }
                     },
-                    update: { tyreId: finalInstalledTyreId }, // Gunakan finalInstalledTyreId
+                    update: { tyreId: installedTyreId },
                     create: {
                         unitId,
                         position: finalTyrePosition,
-                        tyreId: finalInstalledTyreId
+                        tyreId: installedTyreId
                     }
                 });
             }
 
 
             // 4. Update status Tyre yang dilepas
-            if (finalRemovedTyreId && removedTyreDetails) { // Gunakan finalRemovedTyreId
+            if (removedTyreId && removedTyreDetails) {
                 await tx.tyre.update({
-                    where: { id: finalRemovedTyreId },
+                    where: { id: removedTyreId },
                     data: {
                         tread1: tread1Remove ?? removedTyreDetails.tread1 ?? undefined,
                         tread2: tread2Remove ?? removedTyreDetails.tread2 ?? undefined,
-                        isReady: true,
+                        isReady: false,
                         isInstalled: false,
                         installedUnitId: null,
                         positionTyre: null,
@@ -383,8 +382,8 @@ export const createActivityTyre = async (req: Request, res: Response) => {
                 const activitiesForRemovedTyre = await tx.activityTyre.findMany({
                     where: {
                         OR: [
-                            { installedTyreId: finalRemovedTyreId }, // Gunakan finalRemovedTyreId
-                            { removedTyreId: finalRemovedTyreId }    // Gunakan finalRemovedTyreId
+                            { installedTyreId: removedTyreId },
+                            { removedTyreId: removedTyreId }
                         ],
                     },
                     orderBy: { dateTimeWork: 'asc' },
@@ -404,10 +403,10 @@ export const createActivityTyre = async (req: Request, res: Response) => {
                 let lastInstallKM: number | null = null;
 
                 for (const activity of activitiesForRemovedTyre) {
-                    if (activity.installedTyreId === finalRemovedTyreId) {
+                    if (activity.installedTyreId === removedTyreId) {
                         lastInstallHM = activity.hmAtActivity ?? 0;
                         lastInstallKM = activity.kmAtActivity ?? 0;
-                    } else if (activity.removedTyreId === finalRemovedTyreId && lastInstallHM !== null && lastInstallKM !== null) {
+                    } else if (activity.removedTyreId === removedTyreId && lastInstallHM !== null && lastInstallKM !== null) {
                         const removalHM = activity.hmAtActivity ?? 0;
                         const removalKM = activity.kmAtActivity ?? 0;
                         accumulatedHM += Math.max(removalHM - lastInstallHM, 0);
@@ -418,7 +417,7 @@ export const createActivityTyre = async (req: Request, res: Response) => {
                 }
 
                 await tx.tyre.update({
-                    where: { id: finalRemovedTyreId },
+                    where: { id: removedTyreId },
                     data: {
                         hmTyre: accumulatedHM,
                         kmTyre: accumulatedKM,
@@ -427,9 +426,9 @@ export const createActivityTyre = async (req: Request, res: Response) => {
             }
 
             // 5. Update status Tyre yang dipasang
-            if (finalInstalledTyreId && installedTyreDetails && finalTyrePosition) { // Gunakan finalInstalledTyreId
+            if (installedTyreId && installedTyreDetails && finalTyrePosition) {
                 await tx.tyre.update({
-                    where: { id: finalInstalledTyreId },
+                    where: { id: installedTyreId },
                     data: {
                         tread1: tread1Install ?? installedTyreDetails.tread1 ?? undefined,
                         tread2: tread2Install ?? installedTyreDetails.tread2 ?? undefined,
@@ -463,12 +462,12 @@ export const createActivityTyre = async (req: Request, res: Response) => {
                     hmAtActivity: hmAtActivity ?? 0,
                     kmAtActivity: kmAtActivity ?? 0,
                     location: location ?? null,
-                    removedTyreId: finalRemovedTyreId, // Gunakan finalRemovedTyreId
+                    removedTyreId,
                     tread1Remove: tread1Remove ?? removedTyreDetails?.tread1 ?? null,
                     tread2Remove: tread2Remove ?? removedTyreDetails?.tread2 ?? null,
                     removeReasonId,
                     removePurposeId,
-                    installedTyreId: finalInstalledTyreId, // Gunakan finalInstalledTyreId
+                    installedTyreId,
                     tread1Install: tread1Install ?? installedTyreDetails?.tread1 ?? null,
                     tread2Install: tread2Install ?? installedTyreDetails?.tread2 ?? null,
                     airConditionId,
@@ -482,9 +481,9 @@ export const createActivityTyre = async (req: Request, res: Response) => {
 
             // 8. Buat/Update InspectionTyre untuk ban yang dilepas/dipasang
             let tyreForNewInspection = null;
-            if (finalRemovedTyreId && removedTyreDetails) { // Gunakan finalRemovedTyreId
+            if (removedTyreId && removedTyreDetails) {
                 tyreForNewInspection = removedTyreDetails;
-            } else if (finalInstalledTyreId && installedTyreDetails) { // Gunakan finalInstalledTyreId
+            } else if (installedTyreId && installedTyreDetails) {
                 tyreForNewInspection = installedTyreDetails;
             }
 
@@ -498,8 +497,8 @@ export const createActivityTyre = async (req: Request, res: Response) => {
                     isDone: false,
                     otd: tyreForNewInspection.tread1 ?? undefined,
                     treadRemaining: tyreForNewInspection.tread1 ?? undefined,
-                    installDate: finalRemovedTyreId ? (await tx.activityTyre.findFirst({ where: { installedTyreId: finalRemovedTyreId }, orderBy: { dateTimeWork: 'desc' } }))?.dateTimeWork : undefined,
-                    removeDate: finalInstalledTyreId ? (await tx.activityTyre.findFirst({ where: { removedTyreId: finalInstalledTyreId }, orderBy: { dateTimeWork: 'desc' } }))?.dateTimeWork : undefined,
+                    installDate: removedTyreId ? (await tx.activityTyre.findFirst({ where: { installedTyreId: removedTyreId }, orderBy: { dateTimeWork: 'desc' } }))?.dateTimeWork : undefined,
+                    removeDate: installedTyreId ? (await tx.activityTyre.findFirst({ where: { removedTyreId: installedTyreId }, orderBy: { dateTimeWork: 'desc' } }))?.dateTimeWork : undefined,
                     removePurposeId: removePurposeId ?? undefined,
                 };
 
@@ -521,23 +520,23 @@ export const createActivityTyre = async (req: Request, res: Response) => {
             res.status(404).json({ message: error.message });
             return;
         }
-        if (error.message.includes("Tyre (StockTyre ID") && error.message.includes("not found")) {
-            res.status(404).json({ message: error.message }); // Adjusted message for StockTyreId input
+        if (error.message.includes("Tyre ID") && error.message.includes("not found")) {
+            res.status(404).json({ message: error.message });
             return;
         }
-        if (error.message.includes("Tyre (StockTyre ID") && (error.message.includes("is deleted") || error.message.includes("is already installed") || error.message.includes("is not ready") || error.message.includes("has no associated Tyre instance"))) {
-            res.status(400).json({ message: error.message }); // Adjusted message for StockTyreId input
-            return;
-        }
-        if (error.message.includes("Removed Tyre (ID") && error.message.includes("is not installed at position")) {
+        if (error.message.includes("Tyre ID") && (error.message.includes("is deleted") || error.message.includes("is already installed") || error.message.includes("is not ready"))) {
             res.status(400).json({ message: error.message });
             return;
         }
-        if (error.message.includes("Removed Tyre (ID") && error.message.includes("has no assigned position")) {
+        if (error.message.includes("tyrePosition is required")) { // Pesan ini bisa dihapus jika tidak lagi mandatory
             res.status(400).json({ message: error.message });
             return;
         }
-        if (error.message.includes("tyrePosition is required")) {
+        if (error.message.includes("Removed tyre is not currently installed")) {
+            res.status(400).json({ message: error.message });
+            return;
+        }
+        if (error.message.includes("Tyre position could not be determined")) {
             res.status(400).json({ message: error.message });
             return;
         }
