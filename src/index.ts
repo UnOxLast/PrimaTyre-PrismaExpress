@@ -57,7 +57,7 @@ app.use('/export', exportRouter)
 app.use('/dropdown', dropdownRouter);
 
 app.get('/', (req, res) => {
-    res.status(200).json({ message: 'Server is gud' });
+    res.status(200).json({ message: 'Server Version 1.5.0 - Date: 22-07-2025 time: 16:46:00 WIB' });
 });
 
 app.listen(Number(PORT), '0.0.0.0', () => {
