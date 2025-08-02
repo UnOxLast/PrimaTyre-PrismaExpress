@@ -48,7 +48,7 @@
   "include": [
     "src"
   ],
-  "version": "1.5.2",
+  "version": "1.5.3",
   "description": "This Project is PrimaTyre from Prima Jaya Persada",
   "main": "src/index.js",
   "keywords": [],

@@ -235,8 +235,8 @@ export const createUnit = async (req: Request, res: Response) => {
                 data: unitData
             });
 
-            // dateTimeWork should represent the actual moment of installation for the activity
-            const activityDateTimeWork = new Date(); // Current server time for the work activity
+            // dateTimeWork will use the same value as dateTimeDone (user input or current time)
+            const activityDateTimeWork = parsedDateTimeDone || new Date(); // Use dateTimeDone if provided, otherwise current server time
 
             // 4.2. Create UnitTyrePosition & ActivityTyre for each tyre, and update Tyre status
             for (let i = 0; i < finalTyreIds.length; i++) {
@@ -279,9 +279,8 @@ export const createUnit = async (req: Request, res: Response) => {
                         tread1Install: tyreData.tread1 ?? null, // Use pre-fetched tread values
                         tread2Install: tyreData.tread2 ?? null,
                         tyrePosition: i + 1, // Position on the unit
-                        dateTimeWork: activityDateTimeWork, // Use the server-generated work time
-                        // Conditionally add dateTimeDone only if it was provided and successfully parsed
-                        ...(parsedDateTimeDone && { dateTimeDone: parsedDateTimeDone }),
+                        dateTimeWork: activityDateTimeWork, // Same as dateTimeDone (user input or current time)
+                        dateTimeDone: activityDateTimeWork, // Same as dateTimeWork
                     }
                 });
             }

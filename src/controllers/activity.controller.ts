@@ -587,24 +587,78 @@ export const exportActivityToExcel = async (req: Request, res: Response) => {
             filters.unit = { siteId: Number(siteId) };
         }
 
-        // Jika tanggal tidak diberikan, gunakan hari ini
+        // Filter menggunakan logic yang sama dengan Excel:
+        // - Install saja: filter berdasarkan dateTimeDone
+        // - Remove + Install: filter berdasarkan dateTimeWork
+        // - Fallback: jika kedua tanggal null, gunakan createdAt
         const today = new Date();
         if (!startDate && !endDate) {
-            filters.dateTimeWork = {
-                gte: new Date(today.setHours(0, 0, 0, 0)), // Awal hari ini
-                lte: new Date(today.setHours(23, 59, 59, 999)), // Akhir hari ini
-            };
+            // Default: hari ini - gunakan OR untuk mencakup semua kemungkinan
+            const startOfDay = new Date(today.setHours(0, 0, 0, 0));
+            const endOfDay = new Date(today.setHours(23, 59, 59, 999));
+            filters.OR = [
+                // Activity dengan remove (gunakan dateTimeWork)
+                {
+                    removedTyreId: { not: null },
+                    dateTimeWork: { not: null, gte: startOfDay, lte: endOfDay }
+                },
+                // Activity install saja (gunakan dateTimeDone)
+                {
+                    removedTyreId: null,
+                    dateTimeDone: { not: null, gte: startOfDay, lte: endOfDay }
+                },
+                // Fallback: jika dateTimeWork dan dateTimeDone null, gunakan createdAt
+                {
+                    dateTimeWork: null,
+                    dateTimeDone: null,
+                    createdAt: { gte: startOfDay, lte: endOfDay }
+                }
+            ];
         } else if (startDate && !endDate) {
+            // Single date - gunakan OR untuk mencakup semua kemungkinan
             const start = new Date(startDate as string);
-            filters.dateTimeWork = {
-                gte: new Date(start.setHours(0, 0, 0, 0)), // Awal hari
-                lte: new Date(start.setHours(23, 59, 59, 999)), // Akhir hari
-            };
+            const startOfDay = new Date(start.setHours(0, 0, 0, 0));
+            const endOfDay = new Date(start.setHours(23, 59, 59, 999));
+            filters.OR = [
+                // Activity dengan remove (gunakan dateTimeWork)
+                {
+                    removedTyreId: { not: null },
+                    dateTimeWork: { not: null, gte: startOfDay, lte: endOfDay }
+                },
+                // Activity install saja (gunakan dateTimeDone)
+                {
+                    removedTyreId: null,
+                    dateTimeDone: { not: null, gte: startOfDay, lte: endOfDay }
+                },
+                // Fallback: jika dateTimeWork dan dateTimeDone null, gunakan createdAt
+                {
+                    dateTimeWork: null,
+                    dateTimeDone: null,
+                    createdAt: { gte: startOfDay, lte: endOfDay }
+                }
+            ];
         } else {
-            filters.dateTimeWork = {
-                gte: new Date(startDate as string),
-                lte: new Date(endDate as string),
-            };
+            // Date range - gunakan OR untuk mencakup semua kemungkinan
+            const startDate_parsed = new Date(startDate as string);
+            const endDate_parsed = new Date(endDate as string);
+            filters.OR = [
+                // Activity dengan remove (gunakan dateTimeWork)
+                {
+                    removedTyreId: { not: null },
+                    dateTimeWork: { not: null, gte: startDate_parsed, lte: endDate_parsed }
+                },
+                // Activity install saja (gunakan dateTimeDone)
+                {
+                    removedTyreId: null,
+                    dateTimeDone: { not: null, gte: startDate_parsed, lte: endDate_parsed }
+                },
+                // Fallback: jika dateTimeWork dan dateTimeDone null, gunakan createdAt
+                {
+                    dateTimeWork: null,
+                    dateTimeDone: null,
+                    createdAt: { gte: startDate_parsed, lte: endDate_parsed }
+                }
+            ];
         }
 
         const activities = await activityClient.findMany({
@@ -629,6 +683,7 @@ export const exportActivityToExcel = async (req: Request, res: Response) => {
                 removePurpose: true,
                 airCondition: true,
             }
+            // Hapus orderBy di sini, akan diurutkan setelah conditional logic diterapkan
         });
 
         const workbook = new ExcelJS.Workbook();
@@ -812,41 +867,97 @@ export const exportActivityToExcel = async (req: Request, res: Response) => {
         // })
 
 
-        activities.forEach((activity) => {
+        // Proses data dan buat array dengan tanggal yang sudah di-resolve
+        const processedActivities = activities.map((activity) => {
             const formatDateTime = (date: Date | null | undefined) => {
                 if (!date) return '';
                 return formatInTimeZone(date, 'Asia/Jakarta', 'yyyy-MM-dd HH:mm:ss');
             };
 
-            const row = {
-                site: activity.unit?.site?.name,
-                dateTimeWork: formatDateTime(activity.dateTimeWork), // Format to Jakarta timezone
-                nomorUnit: activity.unit?.nomorUnit,
-                hmUnit: activity.hmAtActivity,
-                location: activity.location,
-                tyrePosition: activity.tyrePosition,
+            // Logika tanggal berdasarkan apakah ada removedTyreId atau tidak
+            const isInstallOnly = activity.removedTyreId === null;
 
-                removeSN: activity.removedTyre?.stockTyre?.serialNumber || '',
-                removeSize: activity.removedTyre?.stockTyre?.tyreSize?.size || '',
-                removeMerk: `${activity.removedTyre?.stockTyre?.merk?.name || ''} - ${activity.removedTyre?.stockTyre?.pattern || ''}`,
-                removeTread: `${activity.tread1Remove || ''}/${activity.tread2Remove || ''}`,
-                removeHMKM: `${activity.removedTyre?.hmTyre || ''}/${activity.removedTyre?.kmTyre || ''}`,
-                removeReason: activity.removeReason?.description || '',
-                removePurpose: activity.removePurpose?.name || '',
+            // Cek apakah ini adalah fallback case (dateTimeWork dan dateTimeDone null)
+            const isFallbackCase = !activity.dateTimeWork && !activity.dateTimeDone;
 
-                installSN: activity.installedTyre?.stockTyre?.serialNumber || '',
-                installSize: activity.installedTyre?.stockTyre?.tyreSize?.size || '',
-                installMerk: `${activity.installedTyre?.stockTyre?.merk?.name || ''} - ${activity.installedTyre?.stockTyre?.pattern || ''}`,
-                installTread: `${activity.tread1Install || ''}/${activity.tread2Install || ''}`,
-                installHMKM: `${activity.installedTyre?.hmTyre || '0'}/${activity.installedTyre?.kmTyre || '0'}`,
-                airPressure: activity.airPressure || '',
-                airCondition: activity.airCondition?.name || '',
+            // TANGGAL JAM PENGERJAAN logic:
+            let dateTimeWorkForExcel: string;
+            let dateTimeWorkForSorting: Date | null = null;
+            if (isFallbackCase) {
+                // Fallback: gunakan createdAt untuk dateTimeWork
+                dateTimeWorkForExcel = formatDateTime(activity.createdAt);
+                dateTimeWorkForSorting = activity.createdAt;
+            } else if (isInstallOnly) {
+                // Install saja: gunakan dateTimeDone
+                dateTimeWorkForExcel = formatDateTime(activity.dateTimeDone);
+                dateTimeWorkForSorting = activity.dateTimeDone;
+            } else {
+                // Remove + Install: gunakan dateTimeWork
+                dateTimeWorkForExcel = formatDateTime(activity.dateTimeWork);
+                dateTimeWorkForSorting = activity.dateTimeWork;
+            }
 
-                manpower: activity.manpower || '',
-                dateTimeDone: formatDateTime(activity.dateTimeDone), // Format to Jakarta timezone
+            // TANGGAL JAM SELESAI logic:
+            let dateTimeDoneForExcel: string;
+            if (isFallbackCase) {
+                // Fallback: gunakan createdAt untuk dateTimeDone
+                dateTimeDoneForExcel = formatDateTime(activity.createdAt);
+            } else {
+                // Normal case: selalu dari dateTimeDone
+                dateTimeDoneForExcel = formatDateTime(activity.dateTimeDone);
+            }
+
+            return {
+                activity,
+                dateTimeWorkForExcel,
+                dateTimeDoneForExcel,
+                dateTimeWorkForSorting,
+                row: {
+                    site: activity.unit?.site?.name,
+                    dateTimeWork: dateTimeWorkForExcel, // Conditional logic with fallback
+                    nomorUnit: activity.unit?.nomorUnit,
+                    hmUnit: activity.hmAtActivity,
+                    location: activity.location,
+                    tyrePosition: activity.tyrePosition,
+
+                    removeSN: activity.removedTyre?.stockTyre?.serialNumber || '',
+                    removeSize: activity.removedTyre?.stockTyre?.tyreSize?.size || '',
+                    removeMerk: `${activity.removedTyre?.stockTyre?.merk?.name || ''} - ${activity.removedTyre?.stockTyre?.pattern || ''}`,
+                    removeTread: `${activity.tread1Remove || ''}/${activity.tread2Remove || ''}`,
+                    removeHMKM: `${activity.removedTyre?.hmTyre || ''}/${activity.removedTyre?.kmTyre || ''}`,
+                    removeReason: activity.removeReason?.description || '',
+                    removePurpose: activity.removePurpose?.name || '',
+
+                    installSN: activity.installedTyre?.stockTyre?.serialNumber || '',
+                    installSize: activity.installedTyre?.stockTyre?.tyreSize?.size || '',
+                    installMerk: `${activity.installedTyre?.stockTyre?.merk?.name || ''} - ${activity.installedTyre?.stockTyre?.pattern || ''}`,
+                    installTread: `${activity.tread1Install || ''}/${activity.tread2Install || ''}`,
+                    installHMKM: `${activity.installedTyre?.hmTyre || '0'}/${activity.installedTyre?.kmTyre || '0'}`,
+                    airPressure: activity.airPressure || '',
+                    airCondition: activity.airCondition?.name || '',
+
+                    manpower: activity.manpower || '',
+                    dateTimeDone: dateTimeDoneForExcel, // Conditional logic with fallback
+                }
             };
+        });
 
-            worksheet.addRow(row);
+        // Sort berdasarkan tanggal yang sebenarnya ditampilkan di Excel
+        processedActivities.sort((a, b) => {
+            // Prioritas sorting: tanggal yang digunakan untuk "TANGGAL JAM PENGERJAAN"
+            const dateA = a.dateTimeWorkForSorting;
+            const dateB = b.dateTimeWorkForSorting;
+
+            if (!dateA && !dateB) return 0;
+            if (!dateA) return 1; // null ke belakang
+            if (!dateB) return -1; // null ke belakang
+
+            return dateA.getTime() - dateB.getTime(); // ascending order
+        });
+
+        // Tulis data yang sudah diurutkan ke Excel
+        processedActivities.forEach((processed) => {
+            worksheet.addRow(processed.row);
         });
 
         res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');

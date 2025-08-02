@@ -6,12 +6,15 @@
 
 - **Manajemen Stok Ban**: Tracking serial number, merk, ukuran, dan harga ban
 - **Manajemen Unit**: Konfigurasi kendaraan dan posisi ban
-- **Aktivitas Ban**: Pencatatan instalasi dan removal ban
+- **Aktivitas Ban**: Pencatatan instalasi dan removal ban dengan business logic otomatis
 - **Inspeksi Ban**: Monitoring kondisi ban dan analisis
 - **Action Tyre**: Workflow tindakan pada ban
-- **Export Data**: Export ke Excel untuk reporting
+- **Export Data**: Export ke Excel dengan formatting dan conditional logic
 - **Authentication**: JWT dan API Key authentication
 - **Role Management**: Sistem role user
+- **Version Management**: Automated versioning dengan build number dan timestamp
+- **Date Handling**: Timezone-aware date formatting (Asia/Jakarta)
+- **Business Logic**: Conditional date fields berdasarkan tipe aktivitas (install/remove)
 
 ## 🛠️ Tech Stack
 
@@ -19,8 +22,10 @@
 - **Database**: SQL Server (dengan opsi PostgreSQL)
 - **ORM**: Prisma
 - **Authentication**: JWT + bcryptjs
-- **Export**: ExcelJS
+- **Export**: ExcelJS dengan conditional formatting
+- **Date Processing**: date-fns-tz untuk timezone handling
 - **CORS**: Configured untuk frontend integration
+- **Build Tools**: tsx, nodemon untuk development
 
 ## 📋 Prerequisites
 
@@ -90,14 +95,15 @@ npm run devSeed
 
 | Script | Command | Description |
 |--------|---------|-------------|
-| **Development** | `npm run dev` | Jalankan development server dengan nodemon |
-| **Build** | `npm run build` | Compile TypeScript ke JavaScript |
+| **Development** | `npm run dev` | Jalankan development server dengan nodemon (auto-update version) |
+| **Build** | `npm run build` | Compile TypeScript ke JavaScript (auto-update version) |
 | **Start** | `npm start` | Jalankan production server |
 | **Migration** | `npm run migrate` | Database migration dengan nama lazy |
 | **Push Schema** | `npm run push` | Push schema ke database |
 | **Seed** | `npm run devSeed` | Seed database dengan data sample |
 | **Queries** | `npm run queries` | Jalankan test queries |
 | **Caching** | `npm run caching` | Test caching functionality |
+| **Versioning** | `npm run version:update` | Update version info dengan timestamp |
 
 ## 📡 API Endpoints
 
@@ -114,10 +120,11 @@ npm run devSeed
 
 ### Utility Endpoints
 - `GET /dropdown` - Data dropdown/master data
-- `GET /export` - Export data ke Excel
+- `POST /export` - Export data ke Excel dengan filtering dan conditional formatting
 
 ### Health Check
 - `GET /ping` - Health check endpoint
+- `GET /version` - Informasi versi aplikasi dengan timestamp
 
 ## 🗃️ Database Schema
 
@@ -146,20 +153,56 @@ npm run devSeed
 - **RoleUser**: Role user
 - **ApiKey**: API key management
 
-## 🔧 Development
+## � Excel Export Features
+
+### Advanced Export Logic
+- **Conditional Date Columns**: Logic tanggal berbeda untuk install-only vs remove+install
+- **Timezone Support**: Otomatis format tanggal ke Asia/Jakarta
+- **Smart Filtering**: Filter berdasarkan dateTimeWork, dateTimeDone, atau fallback ke createdAt
+- **Chronological Sorting**: Data diurutkan berdasarkan tanggal yang sebenarnya ditampilkan
+- **Role-based Access**: Filtering data berdasarkan role user dan site
+
+### Export Parameters
+```json
+{
+  "siteId": "number (optional for admin)",
+  "startDate": "string (YYYY-MM-DD format)",
+  "endDate": "string (YYYY-MM-DD format)", 
+  "roleId": "number (1=admin, others=site-specific)"
+}
+```
+
+### Business Logic
+- **Install Only**: Menggunakan `dateTimeDone` untuk tanggal pengerjaan
+- **Remove + Install**: Menggunakan `dateTimeWork` untuk tanggal pengerjaan  
+- **Fallback**: Jika kedua tanggal null, gunakan `createdAt`
+- **Automatic Sorting**: Data diurutkan berdasarkan tanggal yang ditampilkan di Excel
+
+## �🔧 Development
 
 ### Project Structure
 ```
 src/
-├── controllers/     # Business logic
+├── controllers/     # Business logic dengan conditional date handling
 ├── routes/         # API routes  
 ├── middlewares/    # Auth & validation
-└── types/         # Type definitions
+├── types/         # Type definitions
+└── version-info.json # Auto-generated version info
+
+scripts/
+└── update-version.ts # Version automation script
 
 prisma/
 ├── schema.prisma   # Database schema
 └── migrations/     # Database migrations
 ```
+
+### Automated Versioning
+Sistem otomatis update version info pada setiap build/dev:
+- **Version**: Semantic versioning dari package.json
+- **Build Number**: Unix timestamp unik
+- **Date/Time**: Format Indonesia (WIB timezone)
+- **Auto-trigger**: Pre-build dan pre-dev hooks
 
 ### Database Migration
 ```bash
@@ -189,6 +232,7 @@ npm start
 DATABASE_URL="your-production-database-url"
 PORT=8080
 JWT_SECRET="your-secure-jwt-secret"
+JWT_EXPIRES_IN=1h
 ```
 
 ## 📋 API Documentation
@@ -205,6 +249,36 @@ x-api-key: <your-api-key>
   "success": true,
   "message": "Success message",
   "data": {...}
+}
+```
+
+### Excel Export API Example
+```bash
+# Export dengan filter tanggal
+POST /export
+Content-Type: application/json
+Authorization: Bearer <jwt-token>
+
+{
+  "siteId": 1,
+  "startDate": "2025-08-01",
+  "endDate": "2025-08-02",
+  "roleId": 2
+}
+```
+
+### Version Info API Example
+```bash
+# Get current version info
+GET /version
+
+Response:
+{
+  "version": "1.5.3",
+  "date": "02-08-2025",
+  "time": "16.59.29 WIB",
+  "buildNumber": 1754128769728,
+  "description": "PrimaTyre API Server"
 }
 ```
 
@@ -225,6 +299,26 @@ npx prisma migrate reset
 npx prisma db push
 ```
 
+### Excel Export Issues
+1. **Data tidak urut**: Pastikan sorting logic menggunakan conditional date
+2. **Timezone salah**: Periksa format `Asia/Jakarta` di date-fns-tz
+3. **Filter tidak akurat**: Cek logic OR untuk dateTimeWork/dateTimeDone/createdAt
+4. **Role permission**: Pastikan roleId dan siteId sesuai untuk filtering
+
+### Version Management Issues
+```bash
+# Manual update version info
+npm run version:update
+
+# Check version endpoint
+curl http://localhost:8080/version
+```
+
+### Performance Issues
+1. **Large dataset export**: Gunakan date range filtering
+2. **Memory usage**: Batasi jumlah data dengan pagination
+3. **Database queries**: Monitor dengan Prisma logging
+
 ### Common Commands
 ```bash
 # Check Prisma version
@@ -235,17 +329,49 @@ npx prisma format
 
 # Generate client
 npx prisma generate
+
+# Update version manually
+npm run version:update
+
+# Test specific functionality
+npm run queries
+npm run caching
 ```
 
 ## 📝 Version Info
 
-- **Version**: 1.0.0
+- **Current Version**: 1.5.3 (Auto-updated)
 - **Node.js**: ≥18.0.0
 - **Prisma**: ^6.7.0
 - **Express**: ^5.1.0
 - **TypeScript**: ^5.8.2
+- **ExcelJS**: ^4.4.0
+- **date-fns-tz**: ^3.2.0
 
-## 👥 Contributing
+### Version Management
+- Version info tersimpan di `src/version-info.json`
+- Auto-update pada setiap build/development
+- Menyertakan build number dan timestamp
+- Accessible via `/version` endpoint
+
+## � Recent Updates & Changelog
+
+### Version 1.5.3 (Latest)
+- ✅ **Excel Export Enhancement**: Conditional date logic untuk kolom TANGGAL JAM PENGERJAAN
+- ✅ **Smart Sorting**: Data Excel diurutkan berdasarkan tanggal yang sebenarnya ditampilkan
+- ✅ **Timezone Support**: Format tanggal otomatis ke Asia/Jakarta (WIB)
+- ✅ **Business Logic**: Install-only vs Remove+Install menggunakan field tanggal berbeda
+- ✅ **Fallback Handling**: Gunakan createdAt jika dateTimeWork dan dateTimeDone null
+- ✅ **Automated Versioning**: Auto-update version info pada build/dev dengan timestamp
+- ✅ **Filter Enhancement**: Conditional filtering sesuai dengan logic Excel export
+
+### Previous Updates
+- 🔧 **Performance**: Query optimization untuk export data
+- 🔧 **Role-based Access**: Filtering berdasarkan site untuk non-admin users
+- 🔧 **Error Handling**: Improved error messages dan validation
+- 🔧 **API Documentation**: Enhanced endpoint documentation
+
+## �👥 Contributing
 
 1. Fork the repository
 2. Create feature branch (`git checkout -b feature/amazing-feature`)
