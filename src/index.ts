@@ -11,6 +11,7 @@ import exportRouter from './routes/export.router';
 import cors from 'cors';
 import { login } from './controllers/auth.controller';
 import dotenv from "dotenv";
+import versionInfo from './version-info.json';
 
 dotenv.config();
 
@@ -57,7 +58,15 @@ app.use('/export', exportRouter)
 app.use('/dropdown', dropdownRouter);
 
 app.get('/', (req, res) => {
-    res.status(200).json({ message: 'Server Version 1.5.0 - Date: 22-07-2025 time: 16:46:00 WIB' });
+    res.status(200).json({
+        message: `Server Version ${versionInfo.version} - Date: ${versionInfo.date} time: ${versionInfo.time}`,
+        version: versionInfo.version,
+        date: versionInfo.date,
+        time: versionInfo.time,
+        buildNumber: versionInfo.buildNumber,
+        description: versionInfo.description,
+        uptime: Math.floor(process.uptime())
+    });
 });
 
 app.listen(Number(PORT), '0.0.0.0', () => {
